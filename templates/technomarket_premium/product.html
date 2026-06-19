@@ -458,6 +458,11 @@ function submitOrder(e) {
   var fd = new FormData(form);
   var data = {};
   fd.forEach(function(v,k){ data[k]=v; });
+  // Build items array using pre-rendered product variables
+  var pid = parseInt(data.product_id);
+  if (pid) {
+    data.items = [{id: pid, name: _productName, price: _productPrice, qty: 1}];
+  }
   fetch(orderUrl(), {
     method: 'POST',
     headers: {'Content-Type':'application/json'},

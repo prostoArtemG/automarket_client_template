@@ -1218,14 +1218,14 @@ async def cms_ord_set_status(cb: CallbackQuery, state: FSMContext) -> None:
     async with AsyncSessionLocal() as session:
         orders = list(await session.scalars(
             select(Order)
-            .where(Order.status == old_status)
+            .where(Order.status == new_status)
             .order_by(Order.id.desc())
             .limit(10)
         ))
     await cb.message.edit_text(
-        _order_list_text(orders, old_status),
+        _order_list_text(orders, new_status),
         parse_mode="HTML",
-        reply_markup=_order_list_kb(orders, old_status),
+        reply_markup=_order_list_kb(orders, new_status),
     )
     await cb.answer("✅ Статус змінено")
 

@@ -65,22 +65,40 @@ class SiteOrderRequest(BaseModel):
     phone: str
     city: str = ""
     comment: str = ""
-    items: list[dict]
+    product_id: Optional[int] = None   # single-product order (from product page)
+    items: list[dict] = []             # explicit items list
+    cart: list[dict] = []              # cart sent by index.html JS
 
 
 @router.post("/order")
 async def create_order(data: SiteOrderRequest, request: Request) -> dict:
+    # Resolve effective items from all possible sources
+    effective_items: list[dict] = data.items or data.cart or []
+
+    # If no items but product_id provided — look up the product
+    if not effective_items and data.product_id:
+        async with AsyncSessionLocal() as session:
+            product = await session.get(Product, data.product_id)
+            if product:
+                effective_items = [{
+                    "id": product.id,
+                    "name": product.name,
+                    "price": float(product.price),
+                    "qty": 1,
+                }]
+
     _total = sum(
         float(item.get("price", 0)) * int(item.get("qty", 1))
-        for item in data.items
+        for item in effective_items
     )
+
     async with AsyncSessionLocal() as session:
         order_obj = Order(
             customer_name=(data.name or "")[:255],
             customer_phone=(data.phone or "")[:64],
             customer_city=(data.city[:255] if data.city else None),
             comment=(data.comment or None),
-            items_json=_json.dumps(data.items, ensure_ascii=False),
+            items_json=_json.dumps(effective_items, ensure_ascii=False),
             total=_total,
             status="new",
         )
@@ -95,23 +113,19 @@ async def create_order(data: SiteOrderRequest, request: Request) -> dict:
     from app.config import settings
     if bot and settings.admin_ids:
         lines = []
-        for item in data.items:
+        for item in effective_items:
             name = item.get("name", "?")
             qty = item.get("qty", 1)
             price = item.get("price", 0)
             lines.append(f"• {name} × {qty} — {price} грн")
         items_text = "\n".join(lines) if lines else "—"
-        total = sum(
-            float(item.get("price", 0)) * int(item.get("qty", 1))
-            for item in data.items
-        )
         msg = (
             f"🛒 <b>Нове замовлення #{order_id}!</b>\n\n"
             f"👤 {data.name}\n"
             f"📞 {data.phone}\n"
             f"🏙 {data.city or '—'}\n\n"
             f"📦 Товари:\n{items_text}\n\n"
-            f"💰 Разом: <b>{total:,.0f} грн</b>\n"
+            f"💰 Разом: <b>{_total:,.0f} грн</b>\n"
             f"💬 {data.comment or '—'}"
         )
         for admin_id in settings.admin_ids:

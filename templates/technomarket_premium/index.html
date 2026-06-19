@@ -548,7 +548,7 @@ function submitOrder(e) {
   var data = {};
   fd.forEach(function(v, k) { data[k] = v; });
   if (!data.product_id && _cart.length) {
-    data.cart = _cart;
+    data.items = _cart;
   }
   fetch(orderUrl(), {
     method: 'POST',
