@@ -597,55 +597,99 @@ def _clean_description(text: str | None) -> str | None:
 def _parse_specs_text(text: str | None) -> list[tuple[str, str]]:
     """Parse supplier-copied specs text into ordered (name, value) pairs.
 
-    Handles per-line and multi-pair-per-line formats:
-      "Назва: Значення"
-      "Назва - Значення"  (space-dash-space)
-      "Назва – Значення"  (em dash)
-      "Назва > Значення"
-      "К1 > В1 > К2 > В2 > ..."  (alternating pairs on one line)
+    Supported formats (auto-detected, can be mixed):
 
-    Lines that cannot be parsed as key-value are silently skipped.
-    Empty name or value → pair is skipped.
+      Single-line:
+        "Назва: Значення"
+        "Назва - Значення"     (space-dash-space)
+        "Назва – Значення"     (em dash)
+        "Назва > Значення"
+        "К1 > В1 > К2 > В2"   (alternating pairs)
+
+      Two-line (name with trailing colon, value on next line):
+        "Номінальний об'єм:"
+        "50 л"
+
+    Lines that are headers ("Характеристики", "📋 Характеристики", etc.)
+    or cannot be parsed as a name/value pair are silently skipped.
     """
     import re
+
     result: list[tuple[str, str]] = []
     if not text:
         return result
 
-    for raw_line in text.splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-        # Strip optional leading bullet / list marker ("• item", "* item", "- item")
-        line = re.sub(r'^[•·*]\s+', '', line)
-        line = re.sub(r'^[-–]\s+', '', line)
-        line = line.strip()
-        if not line:
+    # Pre-process: strip blank lines, strip leading bullets
+    raw_lines = [ln.strip() for ln in text.splitlines()]
+    lines: list[str] = []
+    for ln in raw_lines:
+        ln = re.sub(r'^[•·*]\s+', '', ln)
+        ln = re.sub(r'^[-–]\s+', '', ln)
+        ln = ln.strip()
+        if ln:
+            lines.append(ln)
+
+    def _is_header(s: str) -> bool:
+        """True if line is a section header to skip (e.g. 'Характеристики')."""
+        normalized = re.sub(r'[^\w]', '', s.lower())  # letters/digits only
+        return normalized in {"характеристики", "specifications", "specs"}
+
+    def _looks_like_name_line(s: str) -> bool:
+        """True if line looks like a spec name (has ':', '>', ' - ', ' – ')."""
+        return (":" in s or ">" in s or " - " in s or " – " in s)
+
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+
+        # Skip section headers
+        if _is_header(line) or _is_header(line.rstrip(":")):
+            i += 1
             continue
 
         if ">" in line:
             # Alternating key-value: "К1 > В1 > К2 > В2"
             parts = [p.strip() for p in line.split(">") if p.strip()]
-            for i in range(0, len(parts) - 1, 2):
-                n, v = parts[i].strip(), parts[i + 1].strip()
+            for j in range(0, len(parts) - 1, 2):
+                n, v = parts[j].strip(), parts[j + 1].strip()
                 if n and v:
                     result.append((n, v))
+            i += 1
+
         elif ":" in line:
             n, _, v = line.partition(":")
             n, v = n.strip(), v.strip()
             if n and v:
+                # Inline value: "Назва: Значення"
                 result.append((n, v))
+                i += 1
+            elif n and not v:
+                # Trailing colon only: look ahead for value on the next line
+                if i + 1 < len(lines) and not _looks_like_name_line(lines[i + 1]):
+                    result.append((n, lines[i + 1].strip()))
+                    i += 2  # consume both the name line and the value line
+                else:
+                    i += 1  # name with no value — skip
+            else:
+                i += 1
+
         elif " – " in line:   # em dash
             n, _, v = line.partition(" – ")
             n, v = n.strip(), v.strip()
             if n and v:
                 result.append((n, v))
-        elif " - " in line:   # regular dash with surrounding spaces
+            i += 1
+
+        elif " - " in line:   # regular dash with spaces
             n, _, v = line.partition(" - ")
             n, v = n.strip(), v.strip()
             if n and v:
                 result.append((n, v))
-        # Lines with no recognisable separator are skipped
+            i += 1
+
+        else:
+            # No recognisable separator and not consumed as a value — skip
+            i += 1
 
     return result
 
