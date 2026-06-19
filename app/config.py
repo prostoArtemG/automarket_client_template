@@ -1,5 +1,5 @@
 from typing import List
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -26,6 +26,17 @@ class Settings(BaseSettings):
     cloudinary_api_secret: str = Field("", alias="CLOUDINARY_API_SECRET")
     # Base folder for all uploads; subfolders /products and /logos are appended automatically.
     cloudinary_folder: str = Field("shopplatform/default", alias="CLOUDINARY_FOLDER")
+
+    @field_validator("admin_ids", mode="before")
+    @classmethod
+    def _parse_admin_ids(cls, v):
+        if v is None or v == "":
+            return []
+        if isinstance(v, str):
+            return [int(x.strip()) for x in v.split(",") if x.strip()]
+        if isinstance(v, (list, tuple)):
+            return [int(x) for x in v]
+        return v
 
 
 settings = Settings()
