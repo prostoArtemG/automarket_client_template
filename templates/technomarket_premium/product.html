@@ -177,11 +177,26 @@
 
         <!-- Description -->
         {% if product.description %}
-        <p class="desc" data-ru="{{ product.description }}" data-uk="{{ product.description }}">{{ product.description }}</p>
+        <p class="desc"
+           data-ru="{{ product.description | e }}"
+           data-uk="{{ product.description | e }}"
+           style="white-space:pre-line">{{ product.description }}</p>
         {% endif %}
 
-        <!-- Specs -->
-        {% if product.specs %}
+        <!-- Specs — prefer structured specs_map; fall back to parsing specs text -->
+        {% if product.specs_map %}
+        <div class="specs-box">
+          <h3 data-ru="Характеристики" data-uk="Характеристики">Характеристики</h3>
+          {% for spec_name, spec_val in product.specs_map.items() %}
+          {% if spec_name and spec_val %}
+          <div class="spec-row">
+            <span>{{ spec_name }}</span>
+            <b>{{ spec_val }}</b>
+          </div>
+          {% endif %}
+          {% endfor %}
+        </div>
+        {% elif product.specs %}
         <div class="specs-box">
           <h3 data-ru="Характеристики" data-uk="Характеристики">Характеристики</h3>
           {% for line in product.specs.split('\n') %}
@@ -190,10 +205,6 @@
             <div class="spec-row">
               <span>{{ parts[0].strip() }}</span>
               <b>{{ parts[1].strip() }}</b>
-            </div>
-            {% elif line.strip() %}
-            <div class="spec-row">
-              <span style="grid-column:1/-1;color:#374151;">{{ line.strip() }}</span>
             </div>
             {% endif %}
           {% endfor %}

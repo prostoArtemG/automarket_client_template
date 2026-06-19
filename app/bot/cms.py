@@ -573,19 +573,85 @@ def _specs_kb() -> InlineKeyboardMarkup:
     )
 
 
-def _parse_specs_text(text: str | None) -> dict[str, str]:
-    result: dict[str, str] = {}
+def _clean_description(text: str | None) -> str | None:
+    """Normalize pasted supplier description text.
+
+    - Replaces ">" (used as item separator on supplier sites) with newline
+    - Collapses multiple blank lines
+    - Strips leading/trailing whitespace per line
+    """
+    if not text:
+        return text
+    # Replace ">" separator with newline
+    text = text.replace(">", "\n")
+    # Normalize each line (collapse multiple spaces)
+    lines = [" ".join(line.split()) for line in text.splitlines()]
+    # Remove blank lines
+    lines = [ln for ln in lines if ln]
+    return "\n".join(lines) if lines else None
+
+
+def _parse_specs_text(text: str | None) -> list[tuple[str, str]]:
+    """Parse supplier-copied specs text into ordered (name, value) pairs.
+
+    Handles per-line and multi-pair-per-line formats:
+      "Назва: Значення"
+      "Назва - Значення"  (space-dash-space)
+      "Назва – Значення"  (em dash)
+      "Назва > Значення"
+      "К1 > В1 > К2 > В2 > ..."  (alternating pairs on one line)
+
+    Lines that cannot be parsed as key-value are silently skipped.
+    Empty name or value → pair is skipped.
+    """
+    import re
+    result: list[tuple[str, str]] = []
     if not text:
         return result
-    for line in text.splitlines():
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        # Strip optional leading bullet / list marker ("• item", "* item", "- item")
+        line = re.sub(r'^[•·*]\s+', '', line)
+        line = re.sub(r'^[-–]\s+', '', line)
         line = line.strip()
-        if ":" in line:
-            name, _, value = line.partition(":")
-            name = name.strip()
-            value = value.strip()
-            if name and value:
-                result[name] = value
+        if not line:
+            continue
+
+        if ">" in line:
+            # Alternating key-value: "К1 > В1 > К2 > В2"
+            parts = [p.strip() for p in line.split(">") if p.strip()]
+            for i in range(0, len(parts) - 1, 2):
+                n, v = parts[i].strip(), parts[i + 1].strip()
+                if n and v:
+                    result.append((n, v))
+        elif ":" in line:
+            n, _, v = line.partition(":")
+            n, v = n.strip(), v.strip()
+            if n and v:
+                result.append((n, v))
+        elif " – " in line:   # em dash
+            n, _, v = line.partition(" – ")
+            n, v = n.strip(), v.strip()
+            if n and v:
+                result.append((n, v))
+        elif " - " in line:   # regular dash with surrounding spaces
+            n, _, v = line.partition(" - ")
+            n, v = n.strip(), v.strip()
+            if n and v:
+                result.append((n, v))
+        # Lines with no recognisable separator are skipped
+
     return result
+
+
+def _specs_text_from_list(pairs: list[tuple[str, str]]) -> str | None:
+    """Serialise parsed spec pairs back to "Name: Value" text for Product.specs."""
+    if not pairs:
+        return None
+    return "\n".join(f"{n}: {v}" for n, v in pairs)
 
 
 def _specs_list_text(items: list) -> str:
@@ -804,18 +870,21 @@ async def cms_prod_edit_field_input(message: Message, state: FSMContext) -> None
                 else:
                     product.old_price = v
         elif field == "specs":
-            product.specs = None if clear else val
             # Rebuild ProductSpec rows
             await session.execute(
                 delete(ProductSpec).where(ProductSpec.product_id == prod_id)
             )
-            if not clear:
-                specs_map = _parse_specs_text(val)
-                for spec_name, spec_value in specs_map.items():
+            if clear:
+                product.specs = None
+            else:
+                specs_list = _parse_specs_text(val)
+                # Normalise stored text to "Name: Value" format
+                product.specs = _specs_text_from_list(specs_list) or val
+                for spec_name, spec_value in specs_list:
                     session.add(ProductSpec(product_id=prod_id, name=spec_name, value=spec_value))
                 # Upsert CategorySpec entries
                 if product.category:
-                    for spec_name in specs_map:
+                    for spec_name, _ in specs_list:
                         existing = await session.scalar(
                             select(CategorySpec).where(
                                 CategorySpec.category == product.category,
@@ -1597,7 +1666,13 @@ async def cms_skip_description(cb: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(description=None)
     await state.set_state(CmsAddProduct.specs)
     await cb.message.answer(
-        "Крок 6 — Характеристики товару:\n\nВводьте по одній (наприклад: Площа: 35 м²).\nКоли закінчите — натисніть ✅ Готово.",
+        "Крок 6 — Характеристики товару:\n\nВставте всі характеристики одним повідомленням\n"
+        "або вводьте по одній (наприклад: Площа: 35 м²).\n"
+        "Підтримуються формати:\n"
+        "  Назва: Значення\n"
+        "  Назва > Значення\n"
+        "  К1 > В1 > К2 > В2 > ...\n"
+        "Коли закінчите — натисніть ✅ Готово.",
         reply_markup=_specs_kb(),
     )
     await cb.answer()
@@ -1605,11 +1680,18 @@ async def cms_skip_description(cb: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(StateFilter(CmsAddProduct.description))
 async def cms_add_description(message: Message, state: FSMContext) -> None:
-    val = (message.text or "").strip()
-    await state.update_data(description=val if val and val != "-" else None)
+    raw = (message.text or "").strip()
+    cleaned = _clean_description(raw) if raw and raw != "-" else None
+    await state.update_data(description=cleaned)
     await state.set_state(CmsAddProduct.specs)
     await message.answer(
-        "Крок 6 — Характеристики товару:\n\nВводьте по одній (наприклад: Площа: 35 м²).\nКоли закінчите — натисніть ✅ Готово.",
+        "Крок 6 — Характеристики товару:\n\nВставте всі характеристики одним повідомленням\n"
+        "або вводьте по одній (наприклад: Площа: 35 м²).\n"
+        "Підтримуються формати:\n"
+        "  Назва: Значення\n"
+        "  Назва > Значення\n"
+        "  К1 > В1 > К2 > В2 > ...\n"
+        "Коли закінчите — натисніть ✅ Готово.",
         reply_markup=_specs_kb(),
     )
 
@@ -1641,9 +1723,29 @@ async def cms_add_specs(message: Message, state: FSMContext) -> None:
         return
     data = await state.get_data()
     items: list = list(data.get("specs_items", []))
-    items.append(val)
-    await state.update_data(specs_items=items)
-    await message.answer(_specs_list_text(items), reply_markup=_specs_kb())
+
+    # Parse immediately — supports "K: V", "K > V", "K1 > V1 > K2 > V2", etc.
+    parsed = _parse_specs_text(val)
+    if parsed:
+        for name, value in parsed:
+            items.append(f"{name}: {value}")
+        await state.update_data(specs_items=items)
+        parsed_preview = "\n".join(f"  • {n}: {v}" for n, v in parsed)
+        await message.answer(
+            f"✅ Розпізнано {len(parsed)} характеристик:\n{parsed_preview}\n\n"
+            + _specs_list_text(items),
+            reply_markup=_specs_kb(),
+        )
+    else:
+        # Could not parse as key-value — store raw and warn
+        items.append(val)
+        await state.update_data(specs_items=items)
+        await message.answer(
+            "⚠️ Не вдалось розпізнати формат. Збережено як є.\n"
+            "Підтримувані формати: Назва: Значення  /  Назва > Значення\n\n"
+            + _specs_list_text(items),
+            reply_markup=_specs_kb(),
+        )
 
 
 @router.message(StateFilter(CmsAddProduct.price))
@@ -1827,6 +1929,11 @@ async def _do_save_product(message: Message, state: FSMContext) -> None:
     category = data.get("category")
     photos: list[str] = data.get("collected_photos") or []
 
+    # Normalise description and specs before saving
+    clean_desc = _clean_description(data.get("description"))
+    specs_list = _parse_specs_text(data.get("specs"))
+    clean_specs = _specs_text_from_list(specs_list)  # "К: В\nК: В\n..." or None
+
     # ── Step 1: save the Product (always succeeds regardless of ProductImage) ─
     async with AsyncSessionLocal() as session:
         main_url = photos[0] if photos else None
@@ -1835,8 +1942,8 @@ async def _do_save_product(message: Message, state: FSMContext) -> None:
             group_name=data.get("group_name"),
             category=category,
             brand=data.get("brand"),
-            description=data.get("description"),
-            specs=data.get("specs"),
+            description=clean_desc,
+            specs=clean_specs,
             price=Decimal(data["price"]),
             old_price=old_price_val,
             image_url=main_url,
@@ -1846,12 +1953,12 @@ async def _do_save_product(message: Message, state: FSMContext) -> None:
         await session.flush()
 
         # Save structured specs
-        specs_map = _parse_specs_text(data.get("specs"))
-        for spec_name, spec_value in specs_map.items():
+        specs_list = _parse_specs_text(data.get("specs"))
+        for spec_name, spec_value in specs_list:
             session.add(ProductSpec(product_id=product.id, name=spec_name, value=spec_value))
         # Upsert CategorySpec entries
         if category:
-            for spec_name in specs_map:
+            for spec_name, _ in specs_list:
                 existing = await session.scalar(
                     select(CategorySpec).where(
                         CategorySpec.category == category,

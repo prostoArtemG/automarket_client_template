@@ -198,7 +198,7 @@ async def shop_product(
         try:
             spec_rows = list((
                 await session.scalars(
-                    select(ProductSpec).where(ProductSpec.product_id == product_id)
+                    select(ProductSpec).where(ProductSpec.product_id == product_id).order_by(ProductSpec.id)
                 )
             ).all())
             specs_map = {sr.name: sr.value for sr in spec_rows}
