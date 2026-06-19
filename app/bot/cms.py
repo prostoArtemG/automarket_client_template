@@ -17,7 +17,7 @@ from decimal import Decimal, InvalidOperation
 from uuid import uuid4
 
 from aiogram import Bot, F, Router
-from aiogram.filters import Command, CommandStart, StateFilter
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
@@ -815,20 +815,6 @@ class CmsAdmins(StatesGroup):
 class CmsFilters(StatesGroup):
     category_select = State()  # browsing categories
     spec_list       = State()  # viewing/toggling specs for a selected category
-
-
-# ── /start ─────────────────────────────────────────────────────────────────────
-
-@router.message(CommandStart())
-async def cmd_start(message: Message, state: FSMContext) -> None:
-    await state.clear()
-    shop = await _get_shop()
-    await message.answer(
-        f"👋 Вітаю! Магазин: <b>{shop.shop_title or 'Мій магазин'}</b>\n"
-        "Виберіть розділ у меню:",
-        parse_mode="HTML",
-        reply_markup=main_menu(),
-    )
 
 
 # ── /cancel ────────────────────────────────────────────────────────────────────
