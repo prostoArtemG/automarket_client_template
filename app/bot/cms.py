@@ -30,6 +30,7 @@ from sqlalchemy import delete, func, or_, select
 
 from app.bot.filters import AdminFilter
 from app.bot.keyboards import (
+    BTN_CMS_ADMINS,
     BTN_CMS_FILTERS,
     BTN_CMS_ORDERS,
     BTN_CMS_PRODUCTS,
@@ -39,7 +40,7 @@ from app.bot.keyboards import (
     main_menu,
 )
 from app.db import AsyncSessionLocal
-from app.models import CategorySpec, Order, Product, ProductImage, ProductSpec, ShopSettings, SiteEvent
+from app.models import CategorySpec, Order, Product, ProductImage, ProductSpec, ShopAdmin, ShopSettings, SiteEvent
 
 logger = logging.getLogger(__name__)
 
@@ -805,6 +806,10 @@ class CmsEditProduct(StatesGroup):
 
 class CmsProductSearch(StatesGroup):
     query = State()
+
+
+class CmsAdmins(StatesGroup):
+    add_id = State()  # waiting for numeric Telegram ID input
 
 
 class CmsFilters(StatesGroup):
@@ -2704,3 +2709,164 @@ async def cms_filt_sync(cb: CallbackQuery, state: FSMContext) -> None:
 async def cms_filt_back(cb: CallbackQuery, state: FSMContext) -> None:
     await cb.answer()
     await _filt_show_categories(cb, state)
+
+
+# ── 👥 Управління (Admin management) ─────────────────────────────────────────
+
+def _admins_text(env_ids: frozenset[int], db_admins: list[ShopAdmin]) -> str:
+    lines = ["👥 <b>Управління адміністраторами</b>\n"]
+    lines.append("👑 <b>Суперадміни (env):</b>")
+    for uid in sorted(env_ids):
+        lines.append(f"  • <code>{uid}</code>")
+    lines.append("")
+    if db_admins:
+        lines.append("👤 <b>Додані адміни:</b>")
+        for adm in db_admins:
+            who = f"@{adm.username}" if adm.username else f"<code>{adm.telegram_id}</code>"
+            lines.append(f"  • {who} — <code>{adm.telegram_id}</code>")
+    else:
+        lines.append("👤 <b>Додані адміни:</b> <i>немає</i>")
+    lines.append("\nНатисніть кнопку для керування:")
+    return "\n".join(lines)
+
+
+def _admins_kb(db_admins: list[ShopAdmin]) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for adm in db_admins:
+        who = f"@{adm.username}" if adm.username else str(adm.telegram_id)
+        rows.append([
+            InlineKeyboardButton(
+                text=f"🗑 {who}",
+                callback_data=f"cms:admin:del:{adm.telegram_id}",
+            )
+        ])
+    rows.append([
+        InlineKeyboardButton(text="➕ Додати адміна", callback_data="cms:admin:add"),
+        InlineKeyboardButton(text="🔄 Оновити",       callback_data="cms:admin:list"),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+@router.message(F.text == BTN_CMS_ADMINS)
+async def cms_admins(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(ShopAdmin).order_by(ShopAdmin.added_at))
+        db_admins = list(result.scalars().all())
+    from app.config import settings as app_settings
+    await message.answer(
+        _admins_text(app_settings.admin_ids, db_admins),
+        parse_mode="HTML",
+        reply_markup=_admins_kb(db_admins),
+    )
+
+
+@router.callback_query(F.data == "cms:admin:list")
+async def cms_admins_refresh(cb: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(ShopAdmin).order_by(ShopAdmin.added_at))
+        db_admins = list(result.scalars().all())
+    from app.config import settings as app_settings
+    await cb.message.edit_text(
+        _admins_text(app_settings.admin_ids, db_admins),
+        parse_mode="HTML",
+        reply_markup=_admins_kb(db_admins),
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data == "cms:admin:add")
+async def cms_admins_add_start(cb: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(CmsAdmins.add_id)
+    await cb.message.answer(
+        "➕ <b>Додавання адміна</b>\n\n"
+        "Введіть Telegram ID нового адміністратора\n"
+        "(числовий ID, наприклад: <code>123456789</code>):",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="❌ Скасувати", callback_data="cms:admin:cancel"),
+        ]]),
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data == "cms:admin:cancel")
+async def cms_admins_cancel(cb: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(ShopAdmin).order_by(ShopAdmin.added_at))
+        db_admins = list(result.scalars().all())
+    from app.config import settings as app_settings
+    await cb.message.answer(
+        _admins_text(app_settings.admin_ids, db_admins),
+        parse_mode="HTML",
+        reply_markup=_admins_kb(db_admins),
+    )
+    await cb.answer("❌ Скасовано")
+
+
+@router.message(StateFilter(CmsAdmins.add_id))
+async def cms_admins_add_input(message: Message, state: FSMContext) -> None:
+    raw = (message.text or "").strip()
+    if not raw.lstrip("-").isdigit():
+        await message.answer(
+            "❌ Некоректний формат. Введіть числовий Telegram ID:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="❌ Скасувати", callback_data="cms:admin:cancel"),
+            ]]),
+        )
+        return
+    new_tid = int(raw)
+    from app.config import settings as app_settings
+    if new_tid in app_settings.admin_ids:
+        await message.answer(
+            "ℹ️ Цей користувач вже є суперадміном.\n"
+            "Його не потрібно додавати — доступ уже є.",
+        )
+        return
+    async with AsyncSessionLocal() as session:
+        existing = await session.execute(
+            select(ShopAdmin).where(ShopAdmin.telegram_id == new_tid).limit(1)
+        )
+        if existing.scalar_one_or_none() is not None:
+            await message.answer("⚠️ Цей адмін вже є у списку.")
+            return
+        new_admin = ShopAdmin(telegram_id=new_tid)
+        session.add(new_admin)
+        await session.commit()
+        result = await session.execute(select(ShopAdmin).order_by(ShopAdmin.added_at))
+        db_admins = list(result.scalars().all())
+    await state.clear()
+    await message.answer(
+        f"✅ Адміна <code>{new_tid}</code> додано!\n\n"
+        + _admins_text(app_settings.admin_ids, db_admins),
+        parse_mode="HTML",
+        reply_markup=_admins_kb(db_admins),
+    )
+
+
+@router.callback_query(F.data.startswith("cms:admin:del:"))
+async def cms_admins_del(cb: CallbackQuery, state: FSMContext) -> None:
+    raw = cb.data[len("cms:admin:del:"):]
+    if not raw.lstrip("-").isdigit():
+        await cb.answer("Некоректний ID", show_alert=True)
+        return
+    del_tid = int(raw)
+    from app.config import settings as app_settings
+    if del_tid in app_settings.admin_ids:
+        await cb.answer("🔒 Суперадмінів не можна видалити через бот.", show_alert=True)
+        return
+    async with AsyncSessionLocal() as session:
+        await session.execute(
+            delete(ShopAdmin).where(ShopAdmin.telegram_id == del_tid)
+        )
+        await session.commit()
+        result = await session.execute(select(ShopAdmin).order_by(ShopAdmin.added_at))
+        db_admins = list(result.scalars().all())
+    await cb.message.edit_text(
+        _admins_text(app_settings.admin_ids, db_admins),
+        parse_mode="HTML",
+        reply_markup=_admins_kb(db_admins),
+    )
+    await cb.answer(f"🗑 Адміна {del_tid} видалено")
