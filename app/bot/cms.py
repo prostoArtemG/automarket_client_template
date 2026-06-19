@@ -29,6 +29,7 @@ from sqlalchemy import delete, func, or_, select
 
 from app.bot.filters import AdminFilter
 from app.bot.keyboards import (
+    BTN_CMS_FILTERS,
     BTN_CMS_ORDERS,
     BTN_CMS_PRODUCTS,
     BTN_CMS_SETTINGS,
@@ -636,6 +637,11 @@ class CmsProductSearch(StatesGroup):
     query = State()
 
 
+class CmsFilters(StatesGroup):
+    category_select = State()  # browsing categories
+    spec_list       = State()  # viewing/toggling specs for a selected category
+
+
 # ── /start ─────────────────────────────────────────────────────────────────────
 
 @router.message(CommandStart())
@@ -652,7 +658,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
 
 # ── /cancel ────────────────────────────────────────────────────────────────────
 
-@router.message(StateFilter(CmsAddProduct, CmsSettings, CmsEditProduct, CmsProductSearch, CmsProductPhotos), Command("cancel"))
+@router.message(StateFilter(CmsAddProduct, CmsSettings, CmsEditProduct, CmsProductSearch, CmsProductPhotos, CmsFilters), Command("cancel"))
 async def cms_cancel(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer("Скасовано.", reply_markup=main_menu())
@@ -2153,3 +2159,173 @@ async def cms_ph_add_receive(message: Message, state: FSMContext) -> None:
         ]]),
     )
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── 🧩 Фільтри — управління фільтрами каталогу по категоріях ─────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def _filt_show_categories(target: Message | CallbackQuery, state: FSMContext) -> None:
+    """Show inline keyboard with all product categories for filter management."""
+    async with AsyncSessionLocal() as session:
+        rows = list((await session.scalars(
+            select(Product.category).distinct().where(Product.category.isnot(None))
+        )).all())
+    categories = sorted([r for r in rows if r])
+    await state.update_data(filt_categories=categories)
+    await state.set_state(CmsFilters.category_select)
+
+    if not categories:
+        text = "🧩 Фільтри\n\nКатегорій не знайдено. Спочатку додайте товари із заповненою категорією."
+        kb = None
+    else:
+        text = "🧩 Фільтри — оберіть категорію:"
+        buttons = [
+            [InlineKeyboardButton(text=cat, callback_data=f"cms:filt:cat:{i}")]
+            for i, cat in enumerate(categories)
+        ]
+        kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+    msg = target if isinstance(target, Message) else target.message
+    await msg.answer(text, reply_markup=kb)
+
+
+async def _filt_show_specs(
+    cb_or_msg: CallbackQuery | Message,
+    state: FSMContext,
+    category: str,
+    edit: bool = False,
+) -> None:
+    """Show spec list for a category with ✅/❌ toggles."""
+    async with AsyncSessionLocal() as session:
+        spec_name_rows = list((await session.scalars(
+            select(ProductSpec.name).distinct()
+            .join(Product, ProductSpec.product_id == Product.id)
+            .where(Product.category == category)
+            .order_by(ProductSpec.name)
+        )).all())
+        spec_names = [s for s in spec_name_rows if s]
+
+        cs_rows = list((await session.scalars(
+            select(CategorySpec).where(CategorySpec.category == category)
+        )).all())
+    cs_map: dict[str, bool] = {cs.name: cs.is_filterable for cs in cs_rows}
+
+    # Default: filterable=True for specs without a CategorySpec row yet
+    specs = [(name, cs_map.get(name, True)) for name in spec_names]
+    await state.update_data(filt_specs=[[s[0], s[1]] for s in specs], filt_current_cat=category)
+    await state.set_state(CmsFilters.spec_list)
+
+    if not specs:
+        text = f"🧩 Фільтри «{category}»\n\nУ товарів цієї категорії ще немає характеристик (spec)."
+    else:
+        text = f"🧩 Фільтри «{category}»\nНатисніть характеристику, щоб увімкнути/вимкнути:"
+
+    buttons: list[list[InlineKeyboardButton]] = []
+    for i, (name, filterable) in enumerate(specs):
+        icon = "✅" if filterable else "❌"
+        buttons.append([InlineKeyboardButton(text=f"{icon} {name}", callback_data=f"cms:filt:toggle:{i}")])
+
+    buttons.append([InlineKeyboardButton(text="🔄 Синхронізувати з товарами", callback_data="cms:filt:sync")])
+    buttons.append([InlineKeyboardButton(text="◀ До категорій", callback_data="cms:filt:back")])
+    kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+    msg = cb_or_msg if isinstance(cb_or_msg, Message) else cb_or_msg.message
+    if edit and not isinstance(cb_or_msg, Message):
+        await cb_or_msg.message.edit_text(text, reply_markup=kb)
+    else:
+        await msg.answer(text, reply_markup=kb)
+
+
+@router.message(F.text == BTN_CMS_FILTERS)
+async def cms_filters_menu(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await _filt_show_categories(message, state)
+
+
+@router.callback_query(F.data.startswith("cms:filt:cat:"), StateFilter(CmsFilters.category_select))
+async def cms_filt_cat_select(cb: CallbackQuery, state: FSMContext) -> None:
+    await cb.answer()
+    data = await state.get_data()
+    try:
+        idx = int(cb.data.split(":")[-1])
+    except ValueError:
+        return
+    categories = data.get("filt_categories", [])
+    if idx >= len(categories):
+        return
+    category = categories[idx]
+    await _filt_show_specs(cb, state, category)
+
+
+@router.callback_query(F.data.startswith("cms:filt:toggle:"), StateFilter(CmsFilters.spec_list))
+async def cms_filt_toggle(cb: CallbackQuery, state: FSMContext) -> None:
+    await cb.answer()
+    data = await state.get_data()
+    try:
+        idx = int(cb.data.split(":")[-1])
+    except ValueError:
+        return
+    specs: list[list] = data.get("filt_specs", [])
+    category: str = data.get("filt_current_cat", "")
+    if idx >= len(specs):
+        return
+
+    name, current = specs[idx]
+    new_val = not current
+
+    async with AsyncSessionLocal() as session:
+        cs = (await session.scalars(
+            select(CategorySpec).where(
+                CategorySpec.category == category,
+                CategorySpec.name == name,
+            )
+        )).first()
+        if cs is not None:
+            cs.is_filterable = new_val
+        else:
+            session.add(CategorySpec(category=category, name=name, is_filterable=new_val))
+        await session.commit()
+
+    specs[idx] = [name, new_val]
+    await state.update_data(filt_specs=specs)
+    await _filt_show_specs(cb, state, category, edit=True)
+
+
+@router.callback_query(F.data == "cms:filt:sync", StateFilter(CmsFilters.spec_list))
+async def cms_filt_sync(cb: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    category: str = data.get("filt_current_cat", "")
+
+    async with AsyncSessionLocal() as session:
+        # Discover all spec names for this category from products
+        all_names_rows = list((await session.scalars(
+            select(ProductSpec.name).distinct()
+            .join(Product, ProductSpec.product_id == Product.id)
+            .where(Product.category == category)
+        )).all())
+        all_names = {s for s in all_names_rows if s}
+
+        # Find which ones already have a CategorySpec row
+        existing_names = {
+            cs.name
+            for cs in (await session.scalars(
+                select(CategorySpec).where(CategorySpec.category == category)
+            )).all()
+        }
+
+        new_names = all_names - existing_names
+        for name in sorted(new_names):
+            session.add(CategorySpec(category=category, name=name, is_filterable=True))
+        await session.commit()
+
+    await cb.answer(
+        f"✅ Синхронізовано: +{len(new_names)} нових" if new_names else "✅ Все актуально",
+        show_alert=bool(new_names),
+    )
+    await _filt_show_specs(cb, state, category, edit=True)
+
+
+@router.callback_query(F.data == "cms:filt:back", StateFilter(CmsFilters.spec_list))
+async def cms_filt_back(cb: CallbackQuery, state: FSMContext) -> None:
+    await cb.answer()
+    await _filt_show_categories(cb, state)

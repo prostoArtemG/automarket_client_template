@@ -83,16 +83,40 @@ async def shop_index(
 
         # Extract product data inside session to avoid DetachedInstanceError
         _specs_by_product: dict[int, dict[str, str]] = {}
-        available_filters: dict[str, list] = {}
+
+        # Build product category/group lookup (needed for per-group filter split)
+        _prod_cat_map: dict[int, tuple[str, str]] = {
+            p.id: (p.category or "", p.group_name or "")
+            for p in products_rows
+        }
+
+        # Fetch CategorySpec — tracks which specs are filterable per category.
+        # A (category, spec_name) NOT in this table defaults to filterable=True.
+        # A row with is_filterable=False hides that spec from the filter sidebar.
+        _cat_spec_rows = list((await session.scalars(select(CategorySpec))).all())
+        _disabled_specs: set[tuple[str, str]] = {
+            (cs.category or "", cs.name or "")
+            for cs in _cat_spec_rows
+            if not cs.is_filterable
+        }
+
+        category_filters: dict[str, dict[str, list]] = {}
         try:
             spec_rows = list((
                 await session.scalars(select(ProductSpec))
             ).all())
-            _filters_acc: dict[str, set] = {}
+            _group_acc: dict[str, dict[str, set]] = {}
             for _sr in spec_rows:
                 _specs_by_product.setdefault(_sr.product_id, {})[_sr.name] = _sr.value
-                _filters_acc.setdefault(_sr.name, set()).add(_sr.value)
-            available_filters = {k: sorted(v) for k, v in _filters_acc.items()}
+                cat, group = _prod_cat_map.get(_sr.product_id, ("", ""))
+                if (cat, _sr.name) not in _disabled_specs:
+                    _key = group if group else cat
+                    if _key:
+                        _group_acc.setdefault(_key, {}).setdefault(_sr.name, set()).add(_sr.value)
+            category_filters = {
+                g: {k: sorted(v) for k, v in sp.items()}
+                for g, sp in _group_acc.items()
+            }
         except Exception:
             await session.rollback()
 
@@ -125,7 +149,7 @@ async def shop_index(
             "lang": chosen,
             "client": client,
             "products": products,
-            "available_filters": available_filters,
+            "category_filters": category_filters,
             "event_url": "/api/event",
         },
     )

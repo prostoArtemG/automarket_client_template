@@ -145,27 +145,8 @@
             </label>
           </div>
 
-          <!-- Specs filters (rendered only when available_filters is non-empty) -->
-          {% if available_filters %}
-          <div id="specsFiltersSection" style="margin-top:12px;">
-            {% for spec_name, spec_values in available_filters.items() %}
-            {% if spec_values %}
-            <div class="filter-group" style="margin-bottom:10px;">
-              <div style="font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">{{ spec_name }}</div>
-              {% for val in spec_values %}
-              <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#d1d5db;cursor:pointer;margin-bottom:3px;">
-                <input type="checkbox" class="spec-check"
-                  data-spec-name="{{ spec_name | e }}"
-                  data-spec-value="{{ val | e }}"
-                  onchange="applyFilters()">
-                {{ val }}
-              </label>
-              {% endfor %}
-            </div>
-            {% endif %}
-            {% endfor %}
-          </div>
-          {% endif %}
+          <!-- Specs filters — populated dynamically per selected group -->
+          <div id="specsFiltersSection" style="margin-top:12px;"></div>
         </div>
         <div class="filters-panel-footer">
           <button type="button" class="filters-apply-btn" id="applyFiltersBtn"
@@ -566,6 +547,9 @@ function submitOrder(e) {
 }
 
 // ── Filters ───────────────────────────────────────────────
+// Per-group filterable specs from server: { groupName: { specName: [values] } }
+var _categoryFilters = {{ category_filters | tojson }};
+
 var _activeGroup = '';
 var _cards = [];
 
@@ -573,11 +557,55 @@ function initCards() {
   _cards = Array.from(document.querySelectorAll('#productsGrid .card'));
 }
 
+// ── Spec filter helpers ───────────────────────────────────
+function _escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _getAllSpecFilters() {
+  // Merge specs from all groups for "Всі товари" tab
+  var merged = {};
+  Object.keys(_categoryFilters).forEach(function(g) {
+    var gf = _categoryFilters[g];
+    Object.keys(gf).forEach(function(k) {
+      if (!merged[k]) merged[k] = {};
+      gf[k].forEach(function(v) { merged[k][v] = true; });
+    });
+  });
+  var result = {};
+  Object.keys(merged).forEach(function(k) {
+    result[k] = Object.keys(merged[k]).sort();
+  });
+  return result;
+}
+
+function updateSpecFilters(group) {
+  var section = document.getElementById('specsFiltersSection');
+  if (!section) return;
+  var filters = group ? (_categoryFilters[group] || {}) : _getAllSpecFilters();
+  var specNames = Object.keys(filters);
+  var html = '';
+  specNames.forEach(function(specName) {
+    var vals = filters[specName];
+    if (!vals || !vals.length) return;
+    html += '<div class="filter-group" style="margin-bottom:10px;">';
+    html += '<div style="font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">' + _escHtml(specName) + '</div>';
+    vals.forEach(function(val) {
+      html += '<label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#d1d5db;cursor:pointer;margin-bottom:3px;">';
+      html += '<input type="checkbox" class="spec-check" data-spec-name="' + _escHtml(specName) + '" data-spec-value="' + _escHtml(val) + '" onchange="applyFilters()">';
+      html += ' ' + _escHtml(val) + '</label>';
+    });
+    html += '</div>';
+  });
+  section.innerHTML = html;
+}
+
 function filterByGroup(group, el) {
   _activeGroup = group;
   document.querySelectorAll('.site-category-card').forEach(function(c) {
     c.classList.toggle('active', c.getAttribute('data-filter-group') === group);
   });
+  updateSpecFilters(group);
   applyFilters();
 }
 
@@ -713,6 +741,7 @@ document.querySelectorAll('.card[data-pid]').forEach(function(card) {
 
 // Init
 initCards();
+updateSpecFilters('');
 </script>
 </body>
 </html>
