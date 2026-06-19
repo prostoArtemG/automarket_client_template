@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% if product.seo_title %}{{ product.seo_title }}{% else %}{{ (product.brand or '') ~ ' ' ~ product.name }} — {{ client.shop_title }}{% endif %}</title>
+  {% if product.seo_description %}
+  <meta name="description" content="{{ product.seo_description }}">
+  {% else %}
+  <meta name="description" content="{{ product.name }} — купити в {{ client.shop_title }}. {% if product.price %}Ціна: {{ product.price | int }} грн.{% endif %}">
+  {% endif %}
+  {% if product.seo_keywords %}
+  <meta name="keywords" content="{{ product.seo_keywords }}">
+  {% endif %}
+
+  <!-- Schema.org Product -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": "{{ (product.brand or '') ~ ' ' ~ product.name }}",
+    {% if product.image_url %}"image": "{{ product.image_url }}",{% endif %}
+    {% if product.description %}"description": "{{ product.description | replace('"', "'") }}",{% endif %}
+    {% if product.brand %}"brand": { "@type": "Brand", "name": "{{ product.brand }}" },{% endif %}
+    "offers": {
+      "@type": "Offer",
+      "price": "{{ product.price }}",
+      "priceCurrency": "UAH",
+      "availability": "{% if product.is_available %}https://schema.org/InStock{% else %}https://schema.org/PreOrder{% endif %}"
+    }
+  }
+  </script>
+
+  <link rel="stylesheet" href="/static/css/technomarket_premium.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- ╔══════════════════════════════════════════════╗ -->
+<!-- ║  PROMO BAR                                   ║ -->
+<!-- ╚══════════════════════════════════════════════╝ -->
+<div class="promo-bar" id="promoBar">
+  <div class="promo-marquee-wrap">
+    <span class="promo-bar-text">⚡ Швидка доставка по всій Україні &nbsp;&nbsp;&nbsp;&nbsp; 🛡️ Офіційна гарантія &nbsp;&nbsp;&nbsp;&nbsp; 💳 Кредит 0% &nbsp;&nbsp;&nbsp;&nbsp; 📞 Безкоштовна консультація &nbsp;&nbsp;&nbsp;&nbsp; ⚡ Швидка доставка по всій Україні &nbsp;&nbsp;&nbsp;&nbsp; 🛡️ Офіційна гарантія &nbsp;&nbsp;&nbsp;&nbsp; 💳 Кредит 0% &nbsp;&nbsp;&nbsp;&nbsp; 📞 Безкоштовна консультація</span>
+  </div>
+  <button class="promo-bar-close" onclick="document.getElementById('promoBar').style.display='none'" aria-label="Закрити">✕</button>
+</div>
+
+<!-- ╔══════════════════════════════════════════════╗ -->
+<!-- ║  HEADER                                      ║ -->
+<!-- ╚══════════════════════════════════════════════╝ -->
+<header class="site-header">
+  <div class="header-inner">
+    <div class="header-title">
+      {% if client.logo_url %}
+      <a href="/" class="site-logo" aria-label="{{ client.shop_title }}">
+        <img src="{{ client.logo_url }}" alt="{{ client.shop_title }}" class="logo-img">
+        <span class="logo-text">{{ client.shop_title }}</span>
+      </a>
+      {% else %}
+      <a href="/" class="site-logo" aria-label="{{ client.shop_title }}">
+        <span class="logo-badge">{{ client.shop_title[0] | upper }}</span>
+        <span class="logo-text">{{ client.shop_title }}</span>
+      </a>
+      {% endif %}
+      <p>Побутова техніка під замовлення та в наявності</p>
+      {% if client.phone %}
+      <a href="tel:{{ client.phone | replace(' ','') | replace('(','') | replace(')','') | replace('-','') }}" class="header-phone">📞 {{ client.phone }}</a>
+      {% endif %}
+    </div>
+    <div class="header-actions">
+      <div class="lang-switch">
+        <button class="site-lang-btn" id="langBtnRu" onclick="setLang('ru')">RU</button>
+        <span class="lang-separator">|</span>
+        <button class="site-lang-btn" id="langBtnUk" onclick="setLang('uk')">UA</button>
+      </div>
+      <a href="#" class="cart-pill" id="cartBtn" onclick="openCartDrawer(); return false;" aria-label="Кошик">🛒 <span id="cartCount">0</span></a>
+    </div>
+  </div>
+</header>
+
+<!-- ╔══════════════════════════════════════════════╗ -->
+<!-- ║  PRODUCT PAGE BODY                           ║ -->
+<!-- ╚══════════════════════════════════════════════╝ -->
+<div class="product-page">
+
+  <!-- BREADCRUMB -->
+  <nav class="breadcrumb" aria-label="Хлібні крихти">
+    <a href="/" data-ru="Главная" data-uk="Головна">Головна</a>
+    <span class="breadcrumb-sep">›</span>
+    <a href="/" id="backToCatalog" data-ru="Каталог" data-uk="Каталог">Каталог</a>
+    {% if product.group_name %}
+    <span class="breadcrumb-sep">›</span>
+    <a href="/" id="backToGroup">{{ product.group_name }}</a>
+    {% endif %}
+    <span class="breadcrumb-sep">›</span>
+    <span class="breadcrumb-current">{{ (product.brand or '') ~ ' ' ~ product.name }}</span>
+  </nav>
+
+  <!-- PRODUCT GRID -->
+  <div class="product-grid">
+
+    <!-- LEFT: Gallery -->
+    <div class="product-gallery">
+      {% if product.image_url %}
+      <img src="{{ product.image_url }}"
+           alt="{{ (product.brand or '') ~ ' ' ~ product.name }}"
+           class="main-image"
+           id="mainImg"
+           onclick="openLightbox('{{ product.image_url }}')"
+           title="Натисніть для збільшення">
+      {% else %}
+      <div class="no-photo" style="height:400px;border-radius:16px;">Немає фото</div>
+      {% endif %}
+    </div>
+
+    <!-- RIGHT: Product info -->
+    <div class="product-info">
+      <div class="product-card">
+
+        <!-- Meta: category + badge -->
+        <div class="product-meta">
+          {% if product.category %}
+          <span class="category" style="margin:0;">{{ product.category }}</span>
+          {% endif %}
+          {% if product.badge %}
+          <span class="card-custom-badge badge-{{ product.badge | lower | replace(' ','-') }}" style="position:static;">{{ product.badge }}</span>
+          {% endif %}
+        </div>
+
+        <!-- Title -->
+        <h1 class="product-title">{% if product.brand %}<span style="color:#9ca3af;font-weight:700;font-size:0.75em;">{{ product.brand }}</span><br>{% endif %}{{ product.name }}</h1>
+
+        <!-- Availability -->
+        <div class="product-availability">
+          {% if product.is_available %}
+          <span class="stock-badge stock-in" data-ru="🟢 В наличии" data-uk="🟢 В наявності">🟢 В наявності</span>
+          {% else %}
+          <span class="stock-badge stock-preorder" data-ru="🟡 Под заказ" data-uk="🟡 Під замовлення">🟡 Під замовлення</span>
+          {% endif %}
+        </div>
+
+        <!-- Price -->
+        <div class="price-block" style="margin:14px 0 16px;">
+          <p class="price" style="font-size:30px;">{{ product.price | int }} грн</p>
+          {% if product.old_price %}
+          <p class="old-price">{{ product.old_price | int }} грн</p>
+          <span class="card-sale-badge" style="position:static;margin-left:4px;">
+            -{{ (((product.old_price - product.price) / product.old_price) * 100) | int }}%
+          </span>
+          {% endif %}
+        </div>
+
+        <!-- CTA buttons -->
+        <button class="order-btn-product" id="orderNowBtn"
+                data-ru="Замовити зараз" data-uk="Замовити зараз">
+          Замовити зараз
+        </button>
+        <button class="order-btn-cart" id="addToCartBtn"
+                data-ru="В корзину" data-uk="У кошик">
+          🛒 У кошик
+        </button>
+
+        <!-- Description -->
+        {% if product.description %}
+        <p class="desc" data-ru="{{ product.description }}" data-uk="{{ product.description }}">{{ product.description }}</p>
+        {% endif %}
+
+        <!-- Specs -->
+        {% if product.specs %}
+        <div class="specs-box">
+          <h3 data-ru="Характеристики" data-uk="Характеристики">Характеристики</h3>
+          {% for line in product.specs.split('\n') %}
+            {% set parts = line.split(':', 1) %}
+            {% if parts | length == 2 and parts[0].strip() and parts[1].strip() %}
+            <div class="spec-row">
+              <span>{{ parts[0].strip() }}</span>
+              <b>{{ parts[1].strip() }}</b>
+            </div>
+            {% elif line.strip() %}
+            <div class="spec-row">
+              <span style="grid-column:1/-1;color:#374151;">{{ line.strip() }}</span>
+            </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+        {% endif %}
+
+      </div><!-- /.product-card -->
+    </div><!-- /.product-info -->
+  </div><!-- /.product-grid -->
+
+</div><!-- /.product-page -->
+
+<!-- ╔══════════════════════════════════════════════╗ -->
+<!-- ║  FOOTER                                      ║ -->
+<!-- ╚══════════════════════════════════════════════╝ -->
+<footer class="site-footer">
+  <div class="footer-top">
+    <div class="footer-brand">
+      {% if client.logo_url %}
+      <a href="/" class="site-logo" aria-label="{{ client.shop_title }}">
+        <img src="{{ client.logo_url }}" alt="{{ client.shop_title }}" class="logo-img" style="width:36px;height:36px;">
+        <span class="logo-text">{{ client.shop_title }}</span>
+      </a>
+      {% else %}
+      <a href="/" class="site-logo" aria-label="{{ client.shop_title }}">
+        <span class="logo-badge" style="width:36px;height:36px;font-size:16px;">{{ client.shop_title[0] | upper }}</span>
+        <span class="logo-text">{{ client.shop_title }}</span>
+      </a>
+      {% endif %}
+      <p>Побутова техніка під замовлення та в наявності</p>
+    </div>
+    <div class="footer-col">
+      <h4 data-ru="Каталог" data-uk="Каталог">Каталог</h4>
+      <ul>
+        <li><a href="/" data-ru="Все товары" data-uk="Всі товари">Всі товари</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4 data-ru="Покупателям" data-uk="Покупцям">Покупцям</h4>
+      <ul>
+        <li><a href="#" data-ru="Доставка и оплата" data-uk="Доставка та оплата">Доставка та оплата</a></li>
+        <li><a href="#" data-ru="Гарантия" data-uk="Гарантія">Гарантія</a></li>
+        <li><a href="#" data-ru="Возврат" data-uk="Повернення">Повернення</a></li>
+      </ul>
+    </div>
+    <div class="footer-col footer-contacts">
+      <h4 data-ru="Контакты" data-uk="Контакти">Контакти</h4>
+      {% if client.phone %}
+      <p><a href="tel:{{ client.phone | replace(' ','') | replace('(','') | replace(')','') | replace('-','') }}">📞 {{ client.phone }}</a></p>
+      {% endif %}
+      {% if client.telegram_url %}
+      <p>💬 <a href="{{ client.telegram_url }}" target="_blank" rel="noopener noreferrer">Telegram</a></p>
+      {% endif %}
+      {% if client.instagram_url %}
+      <p>📷 <a href="{{ client.instagram_url }}" target="_blank" rel="noopener noreferrer">Instagram</a></p>
+      {% endif %}
+      {% if client.address %}
+      <p>📍 {{ client.address }}</p>
+      {% endif %}
+    </div>
+  </div>
+  <hr class="footer-divider">
+  <div class="footer-bottom">
+    <span class="copyright">© 2026 {{ client.shop_title }}. Всі права захищено.</span>
+    <div class="footer-bottom-links">
+      <a href="/" data-ru="Каталог" data-uk="Каталог">Каталог</a>
+      <a href="#" data-ru="Контакты" data-uk="Контакти">Контакти</a>
+    </div>
+  </div>
+</footer>
+
+<!-- ╔══════════════════════════════════════════════╗ -->
+<!-- ║  CART DRAWER                                 ║ -->
+<!-- ╚══════════════════════════════════════════════╝ -->
+<div id="cartDrawer" class="cart-drawer" aria-hidden="true" role="dialog" aria-label="Кошик">
+  <div class="cart-drawer-header">
+    <span class="cart-drawer-title" data-ru="Корзина" data-uk="Кошик">🛒 Кошик</span>
+    <button class="cart-drawer-close" onclick="closeCartDrawer()" aria-label="Закрити">✕</button>
+  </div>
+  <div class="cart-drawer-body" id="cartDrawerBody">
+    <div class="cart-drawer-empty">Кошик порожній</div>
+  </div>
+  <div class="cart-drawer-footer" id="cartDrawerFooter" style="display:none">
+    <div class="cart-total-row">
+      <span data-ru="Итого" data-uk="Разом">Разом:</span>
+      <span id="cartTotal">0 грн</span>
+    </div>
+    <button class="cart-checkout-btn" onclick="openOrderModal(null)"
+            data-ru="Оформити замовлення" data-uk="Оформити замовлення">Оформити замовлення</button>
+  </div>
+</div>
+<div id="cartBackdrop" class="cart-backdrop" hidden onclick="closeCartDrawer()"></div>
+
+<!-- ╔══════════════════════════════════════════════╗ -->
+<!-- ║  ORDER MODAL                                 ║ -->
+<!-- ╚══════════════════════════════════════════════╝ -->
+<div id="orderModal" class="order-modal" role="dialog" aria-label="Оформлення замовлення">
+  <div class="order-modal-box">
+    <button class="order-modal-close" onclick="closeOrderModal()" aria-label="Закрити">✕</button>
+    <div class="order-modal-title" data-ru="Оформление заказа" data-uk="Оформлення замовлення">Оформлення замовлення</div>
+    <div class="order-modal-product" id="orderModalProduct"></div>
+    <form id="orderForm" onsubmit="submitOrder(event)">
+      <input type="hidden" id="orderProductId" name="product_id" value="{{ product.id }}">
+      <div class="order-field">
+        <label data-ru="Ваше имя" data-uk="Ваше ім'я">Ваше ім'я</label>
+        <input type="text" name="name" required placeholder="Ім'я та прізвище" autocomplete="name">
+      </div>
+      <div class="order-field">
+        <label data-ru="Телефон" data-uk="Телефон">Телефон</label>
+        <input type="tel" name="phone" required placeholder="+38 (0XX) XXX-XX-XX" autocomplete="tel">
+      </div>
+      <div class="order-field">
+        <label data-ru="Комментарий (необязательно)" data-uk="Коментар (необов'язково)">Коментар (необов'язково)</label>
+        <input type="text" name="comment" placeholder="Колір, комплектація...">
+      </div>
+      <button type="submit" class="order-submit-btn"
+              data-ru="Отправить заявку" data-uk="Надіслати заявку">Надіслати заявку</button>
+    </form>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast" class="toast"></div>
+
+<!-- IMAGE LIGHTBOX -->
+<div class="img-lightbox" id="imgLightbox" onclick="closeLightbox()">
+  <button class="img-lightbox-close" onclick="closeLightbox()" aria-label="Закрити">✕</button>
+  <img src="" alt="" class="img-lightbox-img" id="lightboxImg">
+</div>
+
+<!-- ╔══════════════════════════════════════════════╗ -->
+<!-- ║  SCRIPTS                                     ║ -->
+<!-- ╚══════════════════════════════════════════════╝ -->
+<script>
+// ── Routing ──────────────────────────────────────────────
+function catalogUrl() {
+  return '/';
+}
+function orderUrl() {
+  return '/api/order';
+}
+
+// Fix back-links
+var catalogBase = catalogUrl();
+document.getElementById('backToCatalog').href = catalogBase;
+{% if product.group_name %}
+document.getElementById('backToGroup').href = catalogBase;
+{% endif %}
+
+// ── Language ──────────────────────────────────────────────
+var _lang = localStorage.getItem('tm_lang') || 'uk';
+function setLang(lang) {
+  _lang = lang;
+  localStorage.setItem('tm_lang', lang);
+  document.querySelectorAll('[data-ru][data-uk]').forEach(function(el) {
+    el.textContent = el.getAttribute('data-' + lang) || el.textContent;
+  });
+  document.getElementById('langBtnRu').classList.toggle('active', lang === 'ru');
+  document.getElementById('langBtnUk').classList.toggle('active', lang === 'uk');
+}
+setLang(_lang);
+
+// ── Cart ──────────────────────────────────────────────────
+var _cart = JSON.parse(localStorage.getItem('tm_cart') || '[]');
+var _productId   = {{ product.id }};
+var _productName = '{{ ((product.brand or '') ~ ' ' ~ product.name)|replace("'","\\'") | trim }}';
+var _productPrice = {{ product.price }};
+var _productImg  = '{{ product.image_url or '' }}';
+
+function saveCart() { localStorage.setItem('tm_cart', JSON.stringify(_cart)); }
+function cartTotal() { return _cart.reduce(function(s,i){ return s+i.price*i.qty; },0); }
+function cartCount() { return _cart.reduce(function(s,i){ return s+i.qty; },0); }
+
+function updateCartUI() {
+  var count = cartCount();
+  document.getElementById('cartCount').textContent = count;
+  var body = document.getElementById('cartDrawerBody');
+  var footer = document.getElementById('cartDrawerFooter');
+  if (!_cart.length) {
+    body.innerHTML = '<div class="cart-drawer-empty" data-ru="Корзина пуста" data-uk="Кошик порожній">Кошик порожній</div>';
+    footer.style.display = 'none';
+  } else {
+    footer.style.display = 'flex';
+    body.innerHTML = _cart.map(function(item) {
+      return '<div class="cart-item">' +
+        (item.img ? '<img src="'+item.img+'" class="cart-item-img" alt="">' : '') +
+        '<div class="cart-item-info">' +
+          '<div class="cart-item-name">'+item.name+'</div>' +
+          '<div class="cart-item-price">'+(item.price*item.qty)+' грн</div>' +
+          '<div class="cart-item-controls">' +
+            '<button class="qty-btn" onclick="changeQty('+item.id+',-1)">−</button>' +
+            '<span class="qty-display">'+item.qty+'</span>' +
+            '<button class="qty-btn" onclick="changeQty('+item.id+',1)">+</button>' +
+            '<button class="cart-item-remove" onclick="removeFromCart('+item.id+')" data-ru="Удалить" data-uk="Видалити">Видалити</button>' +
+          '</div>' +
+        '</div></div>';
+    }).join('');
+    document.getElementById('cartTotal').textContent = cartTotal() + ' грн';
+    if (_lang !== 'uk') setLang(_lang);
+  }
+}
+
+function addToCart(id, name, price, img) {
+  id = parseInt(id);
+  var idx = _cart.findIndex(function(i){ return i.id===id; });
+  if (idx>=0) { _cart[idx].qty++; }
+  else { _cart.push({id:id, name:name, price:parseFloat(price), img:img||'', qty:1}); }
+  saveCart(); updateCartUI();
+  showToast(_lang==='ru' ? '✅ Добавлено в корзину' : '✅ Додано до кошика');
+}
+function changeQty(id, delta) {
+  var idx = _cart.findIndex(function(i){return i.id===id;});
+  if (idx<0) return;
+  _cart[idx].qty += delta;
+  if (_cart[idx].qty<=0) _cart.splice(idx,1);
+  saveCart(); updateCartUI();
+}
+function removeFromCart(id) {
+  _cart = _cart.filter(function(i){return i.id!==id;});
+  saveCart(); updateCartUI();
+}
+
+// Product page buttons
+document.getElementById('addToCartBtn').addEventListener('click', function() {
+  addToCart(_productId, _productName, _productPrice, _productImg);
+});
+document.getElementById('orderNowBtn').addEventListener('click', function() {
+  openOrderModal(_productId, _productName);
+});
+
+function openCartDrawer() {
+  document.getElementById('cartDrawer').classList.add('open');
+  document.getElementById('cartDrawer').removeAttribute('aria-hidden');
+  document.getElementById('cartBackdrop').removeAttribute('hidden');
+  document.body.style.overflow = 'hidden';
+}
+function closeCartDrawer() {
+  document.getElementById('cartDrawer').classList.remove('open');
+  document.getElementById('cartDrawer').setAttribute('aria-hidden','true');
+  document.getElementById('cartBackdrop').setAttribute('hidden','');
+  document.body.style.overflow = '';
+}
+updateCartUI();
+
+// ── Order Modal ───────────────────────────────────────────
+function openOrderModal(productId, productName) {
+  var modal = document.getElementById('orderModal');
+  document.getElementById('orderProductId').value = productId || _productId;
+  var prodDiv = document.getElementById('orderModalProduct');
+  prodDiv.textContent = productName || _productName;
+  prodDiv.style.display = 'block';
+  modal.classList.add('open');
+  closeCartDrawer();
+}
+function closeOrderModal() {
+  document.getElementById('orderModal').classList.remove('open');
+}
+
+function submitOrder(e) {
+  e.preventDefault();
+  var form = document.getElementById('orderForm');
+  var fd = new FormData(form);
+  var data = {};
+  fd.forEach(function(v,k){ data[k]=v; });
+  fetch(orderUrl(), {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(data)
+  }).then(function(r){ return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function(){
+      closeOrderModal();
+      _cart = []; saveCart(); updateCartUI();
+      showToast(_lang==='ru' ? '🎉 Заявка принята!' : '🎉 Заявку прийнято!');
+    })
+    .catch(function(){
+      showToast(_lang==='ru' ? '❌ Ошибка. Попробуйте ещё раз.' : '❌ Помилка. Спробуйте ще раз.');
+    });
+}
+
+// ── Toast ─────────────────────────────────────────────────
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function(){ t.classList.remove('show'); }, 2500);
+}
+
+// ── Lightbox ──────────────────────────────────────────────
+function openLightbox(src) {
+  document.getElementById('lightboxImg').src = src;
+  document.getElementById('imgLightbox').classList.add('open');
+}
+function closeLightbox() { document.getElementById('imgLightbox').classList.remove('open'); }
+document.addEventListener('keydown', function(e) {
+  if (e.key==='Escape') { closeLightbox(); closeCartDrawer(); closeOrderModal(); }
+});
+</script>
+</body>
+</html>

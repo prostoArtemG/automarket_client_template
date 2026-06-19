@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>404 — Not found</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/css/custom.css" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              lime:   '#a3e635',
+              purple: '#7c3aed',
+              dark:   '#0f0a1e',
+              card:   '#150e2e',
+            }
+          },
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+</head>
+<body class="bg-brand-dark text-white font-sans antialiased min-h-screen overflow-x-hidden flex items-center justify-center px-6">
+
+  <div class="fixed inset-0 grid-bg opacity-50 pointer-events-none"></div>
+  <div class="fixed -top-40 -left-40 w-96 h-96 bg-purple-700/30 rounded-full blur-3xl pointer-events-none"></div>
+  <div class="fixed -bottom-40 -right-40 w-[500px] h-[500px] bg-lime-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+  <div class="relative max-w-xl w-full text-center animate-fade-up">
+
+    <div class="relative inline-block mb-6">
+      <div class="text-[10rem] md:text-[14rem] font-black leading-none gradient-text animate-float select-none">404</div>
+      <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div class="w-32 h-32 md:w-44 md:h-44 rounded-full bg-brand-lime/10 blur-3xl"></div>
+      </div>
+    </div>
+
+    <div class="glass-card rounded-3xl p-8 md:p-10">
+      <div class="inline-flex items-center gap-2 glass border border-brand-lime/20 text-brand-lime text-xs font-medium px-4 py-1.5 rounded-full mb-5">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M5 19h14a2 2 0 001.84-2.75L13.74 4a2 2 0 00-3.48 0L3.16 16.25A2 2 0 005 19z"/></svg>
+        Workspace not found
+      </div>
+
+      <h1 class="text-3xl md:text-4xl font-black mb-3">
+        We couldn't find <span class="gradient-text">"{{ slug }}"</span>
+      </h1>
+      <p class="text-white/50 text-base md:text-lg mb-8 max-w-md mx-auto">
+        This client workspace doesn't exist or has been removed. Check the URL or request a new site.
+      </p>
+
+      <div class="flex flex-col sm:flex-row gap-3 justify-center">
+        <a href="/" class="cta-btn px-7 py-3 rounded-2xl text-base">
+          Back to home
+        </a>
+        <a href="/create-site" class="px-7 py-3 rounded-2xl text-base border border-white/15 hover:border-brand-lime/40 hover:bg-white/5 text-white/80 hover:text-white transition-all font-semibold">
+          Request a site
+        </a>
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>
