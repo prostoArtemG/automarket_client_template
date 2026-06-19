@@ -1,5 +1,5 @@
-from typing import Any, List
-from pydantic import Field, field_validator
+import json
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,7 +11,9 @@ class Settings(BaseSettings):
     )
 
     bot_token: str = Field(..., alias="BOT_TOKEN")
-    admin_ids: List[int] = Field(default_factory=list, alias="ADMIN_IDS")
+    # Read as a plain string to avoid pydantic-settings trying to coerce a
+    # comma-separated value into List[int] before we can parse it ourselves.
+    admin_ids_raw: str = Field("", alias="ADMIN_IDS")
     database_url: str = Field(..., alias="DATABASE_URL")
 
     app_host: str = Field("0.0.0.0", alias="APP_HOST")
@@ -27,18 +29,22 @@ class Settings(BaseSettings):
     # Base folder for all uploads; subfolders /products and /logos are appended automatically.
     cloudinary_folder: str = Field("shopplatform/default", alias="CLOUDINARY_FOLDER")
 
-    @field_validator("admin_ids", mode="before")
-    @classmethod
-    def _parse_admin_ids(cls, v: Any):
-        if v is None or v == "":
+    @property
+    def admin_ids(self) -> list[int]:
+        """Parse ADMIN_IDS supporting all formats:
+        500134490
+        500134490,123456789
+        [500134490,123456789]
+        """
+        raw = self.admin_ids_raw.strip()
+        if not raw:
             return []
-        if isinstance(v, int):
-            return [v]
-        if isinstance(v, str):
-            return [int(x.strip()) for x in v.split(",") if x.strip()]
-        if isinstance(v, (list, tuple)):
-            return [int(x) for x in v]
-        return v
+        if raw.startswith("["):
+            try:
+                return [int(x) for x in json.loads(raw)]
+            except (json.JSONDecodeError, ValueError):
+                pass
+        return [int(x.strip()) for x in raw.split(",") if x.strip()]
 
 
 settings = Settings()
