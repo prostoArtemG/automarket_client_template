@@ -1857,10 +1857,10 @@ async def _do_save_product(message: Message, state: FSMContext) -> None:
 def _gallery_kb(images: list, prod_id: int, page: int) -> InlineKeyboardMarkup:
     """Build inline keyboard for the photo gallery manager."""
     rows: list[list[InlineKeyboardButton]] = []
-    for img in images:
+    for pos, img in enumerate(images):
         star = "⭐ " if img.is_main else ""
         rows.append([InlineKeyboardButton(
-            text=f"{star}Фото {img.sort_order + 1}",
+            text=f"{star}Фото {pos + 1}",
             callback_data=f"cms:ph:view:{prod_id}:{img.id}:{page}",
         )])
     rows.append([
@@ -1927,9 +1927,9 @@ async def cms_prod_gallery(cb: CallbackQuery, state: FSMContext) -> None:
         text = f"<b>🖼 Фото товару #{prod_id}</b>\n\nФото відсутні."
     else:
         lines = [f"<b>🖼 Фото товару #{prod_id}</b> ({count}/5)\n"]
-        for img in images:
-            star = "⭐ головне" if img.is_main else f"сортування: {img.sort_order}"
-            lines.append(f"• Фото {img.sort_order + 1} — {star}")
+        for pos, img in enumerate(images):
+            label = "⭐ головне" if img.is_main else f"сортування {pos + 1}"
+            lines.append(f"• Фото {pos + 1} — {label}")
         text = "\n".join(lines)
 
     await cb.message.edit_text(text, parse_mode="HTML", reply_markup=_gallery_kb(images, prod_id, page))
@@ -1980,10 +1980,17 @@ async def cms_ph_set_main(cb: CallbackQuery, state: FSMContext) -> None:
 
     async with AsyncSessionLocal() as session:
         imgs = list((await session.scalars(
-            select(ProductImage).where(ProductImage.product_id == prod_id)
+            select(ProductImage)
+            .where(ProductImage.product_id == prod_id)
+            .order_by(ProductImage.sort_order)
         )).all())
-        for img in imgs:
-            img.is_main = (img.id == img_id)
+        # Put the new main photo first, keep relative order of others
+        target = next((i for i in imgs if i.id == img_id), None)
+        if target:
+            ordered = [target] + [i for i in imgs if i.id != img_id]
+            for idx, img in enumerate(ordered):
+                img.sort_order = idx
+                img.is_main = (img.id == img_id)
         await _sync_main_image(session, prod_id)
         await session.commit()
 
@@ -2120,11 +2127,15 @@ async def cms_ph_add_receive(message: Message, state: FSMContext) -> None:
         return
 
     async with AsyncSessionLocal() as session:
-        is_first = count == 0
+        max_order = await session.scalar(
+            select(func.max(ProductImage.sort_order)).where(ProductImage.product_id == prod_id)
+        )
+        new_sort_order = (max_order + 1) if max_order is not None else 0
+        is_first = max_order is None
         session.add(ProductImage(
             product_id=prod_id,
             image_url=url,
-            sort_order=count,
+            sort_order=new_sort_order,
             is_main=is_first,
         ))
         if is_first:
