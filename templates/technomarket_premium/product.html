@@ -175,45 +175,68 @@
           🛒 У кошик
         </button>
 
-        <!-- Description -->
-        {% if product.description %}
-        <p class="desc"
-           data-ru="{{ product.description | e }}"
-           data-uk="{{ product.description | e }}"
-           style="white-space:pre-line">{{ product.description }}</p>
-        {% endif %}
-
-        <!-- Specs — prefer structured specs_map; fall back to parsing specs text -->
-        {% if product.specs_map %}
-        <div class="specs-box">
-          <h3 data-ru="Характеристики" data-uk="Характеристики">Характеристики</h3>
-          {% for spec_name, spec_val in product.specs_map.items() %}
-          {% if spec_name and spec_val %}
-          <div class="spec-row">
-            <span>{{ spec_name }}</span>
-            <b>{{ spec_val }}</b>
-          </div>
-          {% endif %}
-          {% endfor %}
-        </div>
-        {% elif product.specs %}
-        <div class="specs-box">
-          <h3 data-ru="Характеристики" data-uk="Характеристики">Характеристики</h3>
-          {% for line in product.specs.split('\n') %}
-            {% set parts = line.split(':', 1) %}
-            {% if parts | length == 2 and parts[0].strip() and parts[1].strip() %}
-            <div class="spec-row">
-              <span>{{ parts[0].strip() }}</span>
-              <b>{{ parts[1].strip() }}</b>
-            </div>
-            {% endif %}
-          {% endfor %}
-        </div>
-        {% endif %}
 
       </div><!-- /.product-card -->
     </div><!-- /.product-info -->
   </div><!-- /.product-grid -->
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- ║  DESCRIPTION CARD                               ║ -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  {% if product.description | trim %}
+  <div class="prod-info-card">
+    <div class="prod-info-card-header">
+      <span class="prod-info-card-title">📋 ОПИС ТОВАРУ</span>
+    </div>
+    <div class="prod-info-card-divider"></div>
+    {% if '\n' in (product.description | trim) %}
+    <ul class="desc-list">
+      {% for line in product.description.split('\n') %}
+      {% if line | trim %}
+      <li>{{ line | trim }}</li>
+      {% endif %}
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="desc-text">{{ product.description | trim }}</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!-- ║  SPECS CARD                                     ║ -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  {% if product.specs_map or product.specs %}
+  <div class="prod-info-card">
+    <div class="prod-info-card-header">
+      <span class="prod-info-card-title">⚙️ ХАРАКТЕРИСТИКИ</span>
+    </div>
+    <div class="prod-info-card-divider"></div>
+    <div class="prod-specs-rows">
+      {% if product.specs_map %}
+        {% for spec_name, spec_val in product.specs_map.items() %}
+        {% if spec_name and spec_val %}
+        <div class="spec-row">
+          <span>{{ spec_name }}</span>
+          <b>{{ spec_val }}</b>
+        </div>
+        {% endif %}
+        {% endfor %}
+      {% elif product.specs %}
+        {% for line in product.specs.split('\n') %}
+        {% set parts = line.split(':', 1) %}
+        {% if parts | length == 2 and parts[0].strip() and parts[1].strip() %}
+        <div class="spec-row">
+          <span>{{ parts[0].strip() }}</span>
+          <b>{{ parts[1].strip() }}</b>
+        </div>
+        {% endif %}
+        {% endfor %}
+      {% endif %}
+    </div>
+    <button class="specs-toggle-btn" id="specsToggleBtn">Показати всі характеристики ↓</button>
+  </div>
+  {% endif %}
 
 </div><!-- /.product-page -->
 
@@ -339,6 +362,22 @@
 <!-- ║  SCRIPTS                                     ║ -->
 <!-- ╚══════════════════════════════════════════════╝ -->
 <script>
+// ── Specs toggle ─────────────────────────────────────────
+(function() {
+  var rows = document.querySelectorAll('.prod-specs-rows .spec-row');
+  var btn = document.getElementById('specsToggleBtn');
+  if (!btn) return;
+  if (rows.length <= 5) { btn.style.display = 'none'; return; }
+  for (var i = 5; i < rows.length; i++) rows[i].classList.add('spec-hidden');
+  var expanded = false;
+  btn.style.display = '';
+  btn.addEventListener('click', function() {
+    expanded = !expanded;
+    for (var i = 5; i < rows.length; i++) rows[i].classList.toggle('spec-hidden', !expanded);
+    btn.textContent = expanded ? 'Сховати ↑' : 'Показати всі характеристики ↓';
+  });
+})();
+
 // ── Routing ──────────────────────────────────────────────
 function catalogUrl() {
   return '/';

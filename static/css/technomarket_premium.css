@@ -872,8 +872,21 @@ body {
 .specs-box h3 { margin:0 0 12px; font-size:15px; font-weight:700; }
 .spec-row { display:flex; justify-content:space-between; gap:12px; padding:7px 0; border-bottom:1px solid #e5e7eb; }
 .spec-row:last-child { border-bottom:none; }
-.spec-row span { color:#6b7280; font-size:13px; }
-.spec-row b { text-align:right; font-size:13px; }
+.spec-row span { color:#6b7280; font-size:13px; min-width:0; overflow-wrap:anywhere; }
+.spec-row b { text-align:right; font-size:13px; min-width:0; overflow-wrap:anywhere; }
+
+/* ── Product info cards (description + specs below the grid) ── */
+.prod-info-card { background:#fff; border:1px solid #e5e7eb; border-radius:16px; padding:20px 22px; margin-top:20px; }
+.prod-info-card-header { display:flex; align-items:center; }
+.prod-info-card-title { font-size:12px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:#111827; }
+.prod-info-card-divider { height:1px; background:#e5e7eb; margin:12px 0 16px; }
+.desc-list { margin:0; padding:0; list-style:none; }
+.desc-list li { position:relative; padding-left:16px; font-size:14px; color:#374151; line-height:1.65; margin-bottom:5px; }
+.desc-list li::before { content:'•'; position:absolute; left:0; color:#16a34a; font-weight:700; }
+.desc-text { font-size:14px; color:#374151; line-height:1.65; margin:0; }
+.spec-hidden { display:none !important; }
+.specs-toggle-btn { display:none; width:100%; margin-top:14px; padding:9px 16px; background:#fff; border:1.5px solid #d1d5db; border-radius:10px; font-size:13px; font-weight:600; color:#374151; cursor:pointer; text-align:center; box-sizing:border-box; transition:border-color .2s,background .2s,color .2s; }
+.specs-toggle-btn:hover { border-color:#16a34a; background:#f0fdf4; color:#16a34a; }
 .order-btn-product {
     display:block; width:100% !important; height:50px !important;
     border:none; border-radius:14px; background:#16a34a; color:#fff;
@@ -896,6 +909,7 @@ body {
     .product-page { padding:14px; }
     .main-image { height:320px; }
     .thumbs-row { grid-template-columns:repeat(4,1fr); }
+    .prod-info-card { padding:16px; }
 }
 @media (max-width:480px) { .main-image { height:260px; } .thumbs-row { grid-template-columns:repeat(3,1fr); } }
 
