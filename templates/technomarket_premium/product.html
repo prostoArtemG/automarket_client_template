@@ -214,27 +214,35 @@
     <div class="prod-info-card-divider"></div>
     <div class="prod-specs-rows">
       {% if product.specs_map %}
-        {% for spec_name, spec_val in product.specs_map.items() %}
+        {%- set specs_items = product.specs_map.items() | list %}
+        {% for spec_name, spec_val in specs_items %}
         {% if spec_name and spec_val %}
-        <div class="spec-row">
+        <div class="spec-row{% if loop.index > 5 %} spec-extra{% endif %}">
           <span>{{ spec_name }}</span>
           <b>{{ spec_val }}</b>
         </div>
         {% endif %}
         {% endfor %}
+        {% if specs_items | length > 5 %}
+        <button class="specs-toggle-btn" id="specsToggleBtn">Показати всі характеристики ↓</button>
+        {% endif %}
       {% elif product.specs %}
+        {%- set ns = namespace(count=0) %}
         {% for line in product.specs.split('\n') %}
-        {% set parts = line.split(':', 1) %}
+        {%- set parts = line.split(':', 1) %}
         {% if parts | length == 2 and parts[0].strip() and parts[1].strip() %}
-        <div class="spec-row">
+        {%- set ns.count = ns.count + 1 %}
+        <div class="spec-row{% if ns.count > 5 %} spec-extra{% endif %}">
           <span>{{ parts[0].strip() }}</span>
           <b>{{ parts[1].strip() }}</b>
         </div>
         {% endif %}
         {% endfor %}
+        {% if ns.count > 5 %}
+        <button class="specs-toggle-btn" id="specsToggleBtn">Показати всі характеристики ↓</button>
+        {% endif %}
       {% endif %}
     </div>
-    <button class="specs-toggle-btn" id="specsToggleBtn">Показати всі характеристики ↓</button>
   </div>
   {% endif %}
 
@@ -364,16 +372,14 @@
 <script>
 // ── Specs toggle ─────────────────────────────────────────
 (function() {
-  var rows = document.querySelectorAll('.prod-specs-rows .spec-row');
   var btn = document.getElementById('specsToggleBtn');
   if (!btn) return;
-  if (rows.length <= 5) { btn.style.display = 'none'; return; }
-  for (var i = 5; i < rows.length; i++) rows[i].classList.add('spec-hidden');
   var expanded = false;
-  btn.style.display = '';
   btn.addEventListener('click', function() {
     expanded = !expanded;
-    for (var i = 5; i < rows.length; i++) rows[i].classList.toggle('spec-hidden', !expanded);
+    document.querySelectorAll('.prod-specs-rows .spec-extra').forEach(function(row) {
+      row.style.display = expanded ? '' : 'none';
+    });
     btn.textContent = expanded ? 'Сховати ↑' : 'Показати всі характеристики ↓';
   });
 })();
