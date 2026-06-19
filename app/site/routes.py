@@ -35,19 +35,33 @@ async def _get_shop_data() -> dict:
             "shop_title": "TechnoMarket",
             "theme_name": "light_red",
             "phone": None,
+            "phone2": None,
+            "viber_url": None,
             "address": None,
             "telegram_url": None,
             "instagram_url": None,
             "logo_url": None,
+            "subtitle": None,
+            "show_lang_switch": True,
+            "promo_text": None,
+            "show_promo_bar": True,
+            "show_banner": True,
         }
     return {
         "shop_title": shop.shop_title or "TechnoMarket",
         "theme_name": shop.theme_name or "light_red",
         "phone": shop.phone,
+        "phone2": shop.phone2,
+        "viber_url": shop.viber_url,
         "address": shop.address,
         "telegram_url": shop.telegram_url,
         "instagram_url": shop.instagram_url,
         "logo_url": shop.logo_url,
+        "subtitle": shop.subtitle,
+        "show_lang_switch": shop.show_lang_switch,
+        "promo_text": shop.promo_text,
+        "show_promo_bar": shop.show_promo_bar,
+        "show_banner": shop.show_banner,
     }
 
 

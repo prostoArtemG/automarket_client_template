@@ -46,7 +46,38 @@ class ShopSettings(Base):
     telegram_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     instagram_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     logo_url: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
+    # ── v2 fields ─────────────────────────────────────────────────────────────
+    phone2: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    viber_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    subtitle: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    show_lang_switch: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true", default=True
+    )
+    promo_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    show_promo_bar: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true", default=True
+    )
+    show_banner: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true", default=True
+    )
     created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class ShopAdmin(Base):
+    """Dynamic admin list managed via the CMS bot.
+
+    Users in this table gain the same access as ADMIN_IDS from the env file.
+    The env ADMIN_IDS always take precedence and cannot be removed here.
+    """
+
+    __tablename__ = "shop_admins"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    telegram_id: Mapped[int] = mapped_column(BigInteger, nullable=False, unique=True)
+    username: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    added_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
