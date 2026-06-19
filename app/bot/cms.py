@@ -9,6 +9,7 @@ Sections:
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from datetime import datetime, timedelta, timezone
@@ -1687,6 +1688,17 @@ async def cms_add_old_price(message: Message, state: FSMContext) -> None:
 
 MAX_PRODUCT_PHOTOS = 5
 
+# Per-user lock to serialize concurrent state updates during photo collection.
+# Needed because Telegram sends album (media group) photos as separate concurrent
+# updates — without serialization, multiple handlers race on `collected_photos`.
+_photo_add_locks: dict[int, asyncio.Lock] = {}
+
+
+def _get_photo_add_lock(user_id: int) -> asyncio.Lock:
+    if user_id not in _photo_add_locks:
+        _photo_add_locks[user_id] = asyncio.Lock()
+    return _photo_add_locks[user_id]
+
 
 def _photos_progress_kb(count: int) -> InlineKeyboardMarkup:
     """Keyboard shown while collecting photos during add-product flow."""
@@ -1723,66 +1735,90 @@ async def cms_photos_done(cb: CallbackQuery, state: FSMContext) -> None:
 @router.message(StateFilter(CmsAddProduct.photos), F.photo)
 async def cms_add_photo(message: Message, state: FSMContext) -> None:
     from app.config import settings as app_settings
-    data = await state.get_data()
-    collected: list[str] = data.get("collected_photos") or []
 
-    if len(collected) >= MAX_PRODUCT_PHOTOS:
-        await _do_save_product(message, state)
-        return
-
+    # ── Fast pre-check (no lock needed — just reading) ────────────────────────
     if not _is_cloudinary_configured():
+        data = await state.get_data()
+        collected: list[str] = data.get("collected_photos") or []
         await message.answer(
             "📷 Cloudinary не налаштований. Надішліть URL фото або натисніть «Готово»:",
             reply_markup=_photos_progress_kb(len(collected)),
         )
         return
 
+    # ── Step 1: upload BEFORE acquiring lock (slow I/O, can run concurrently) ─
     photo = message.photo[-1]
     folder = f"{app_settings.cloudinary_folder}/products"
     url = await _download_and_upload(message.bot, photo.file_id, folder=folder, kind="product")
     if not url:
+        data = await state.get_data()
+        collected = data.get("collected_photos") or []
         await message.answer(
             "⚠️ Не вдалось завантажити фото. Спробуйте ще раз або натисніть «Готово»:",
             reply_markup=_photos_progress_kb(len(collected)),
         )
         return
 
-    collected.append(url)
-    await state.update_data(collected_photos=collected)
-    count = len(collected)
+    # ── Step 2: critical section — read-modify-write collected_photos ─────────
+    # Serialised with per-user lock to prevent race conditions when Telegram
+    # sends an album (media group) as multiple near-simultaneous updates.
+    lock = _get_photo_add_lock(message.from_user.id)
+    async with lock:
+        data = await state.get_data()
+        collected = data.get("collected_photos") or []
+        if len(collected) >= MAX_PRODUCT_PHOTOS:
+            # Album sent more photos than the limit — silently discard extras.
+            return
+        collected.append(url)
+        count = len(collected)
+        await state.update_data(collected_photos=collected)
 
+    # ── Step 3: progress message (outside lock) ───────────────────────────────
     if count >= MAX_PRODUCT_PHOTOS:
-        await message.answer(f"✅ Фото {count}/{MAX_PRODUCT_PHOTOS} додано. Досягнуто максимум, зберігаємо…")
-        await _do_save_product(message, state)
+        await message.answer(
+            f"✅ Фото додано {count}/{MAX_PRODUCT_PHOTOS} — досягнуто максимум!\n"
+            "Натисніть «Готово» для збереження:",
+            reply_markup=_photos_progress_kb(count),
+        )
     else:
         await message.answer(
-            f"✅ Фото {count}/{MAX_PRODUCT_PHOTOS} додано. Надішліть ще або натисніть «Готово»:",
+            f"✅ Фото додано {count}/{MAX_PRODUCT_PHOTOS}. Надішліть ще фото або натисніть «Готово»:",
             reply_markup=_photos_progress_kb(count),
         )
 
 
 @router.message(StateFilter(CmsAddProduct.photos))
 async def cms_add_photo_url(message: Message, state: FSMContext) -> None:
-    """Accept a URL as a photo during add-product flow."""
+    """Accept a URL as photo, or treat empty/dash as 'skip all photos'."""
     if message.photo:
         await cms_add_photo(message, state)
         return
+
     val = (message.text or "").strip()
-    data = await state.get_data()
-    collected: list[str] = data.get("collected_photos") or []
-    if val and val != "-":
-        collected.append(val)
-        await state.update_data(collected_photos=collected)
-        count = len(collected)
-        if count >= MAX_PRODUCT_PHOTOS:
-            await _do_save_product(message, state)
-            return
-        await message.answer(
-            f"✅ Фото {count}/{MAX_PRODUCT_PHOTOS} додано. Надішліть ще або натисніть «Готово»:",
-            reply_markup=_photos_progress_kb(count),
-        )
-    else:
+    if not val or val == "-":
+        # Empty or dash typed → skip photos, save product now
         await _do_save_product(message, state)
+        return
+
+    # URL provided — add with same lock-based serialisation
+    lock = _get_photo_add_lock(message.from_user.id)
+    async with lock:
+        data = await state.get_data()
+        collected: list[str] = data.get("collected_photos") or []
+        if len(collected) >= MAX_PRODUCT_PHOTOS:
+            await message.answer(
+                f"⚠️ Вже додано максимум {MAX_PRODUCT_PHOTOS} фото. Натисніть «Готово»:",
+                reply_markup=_photos_progress_kb(MAX_PRODUCT_PHOTOS),
+            )
+            return
+        collected.append(val)
+        count = len(collected)
+        await state.update_data(collected_photos=collected)
+
+    await message.answer(
+        f"✅ Фото {count}/{MAX_PRODUCT_PHOTOS} додано. Надішліть ще або натисніть «Готово»:",
+        reply_markup=_photos_progress_kb(count),
+    )
 
 
 async def _do_save_product(message: Message, state: FSMContext) -> None:
