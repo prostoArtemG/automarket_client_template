@@ -60,6 +60,11 @@ class ShopSettings(Base):
     show_banner: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="true", default=True
     )
+    # ── v3 fields ─────────────────────────────────────────────────────────────
+    background_image_url: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
+    show_background_image: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true", default=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

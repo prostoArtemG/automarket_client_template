@@ -46,6 +46,8 @@ async def _get_shop_data() -> dict:
             "promo_text": None,
             "show_promo_bar": True,
             "show_banner": True,
+            "background_image_url": None,
+            "show_background_image": True,
         }
     return {
         "shop_title": shop.shop_title or "TechnoMarket",
@@ -62,6 +64,8 @@ async def _get_shop_data() -> dict:
         "promo_text": shop.promo_text,
         "show_promo_bar": shop.show_promo_bar,
         "show_banner": shop.show_banner,
+        "background_image_url": shop.background_image_url,
+        "show_background_image": shop.show_background_image,
     }
 
 

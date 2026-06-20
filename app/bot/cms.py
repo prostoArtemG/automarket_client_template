@@ -168,6 +168,8 @@ SETTINGS_PROMPTS: dict[str, str] = {
     "instagram_url": "📸 <b>Instagram</b>\n\nВведіть посилання на Instagram\n(наприклад: <code>https://instagram.com/myshop</code>):",
     "logo":          "🖼 <b>Логотип</b>\n\nНадішліть фото логотипу або URL посилання на зображення:",
     "promo_text":    "📢 <b>Бігучий рядок</b>\n\nВведіть текст бігучого рядка у верхній частині сайту:",
+    "background_image": "🌄 <b>Задній фон сайту</b>\n\nНадішліть фото або URL зображення для фону сайту\n(рекомендований розмір: 1920×600px+):\n\n"
+        "Натисніть 🗑 <b>Очистити</b>, щоб прибрати фон.",
 }
 VALID_SETTINGS_FIELDS: frozenset[str] = frozenset(SETTINGS_PROMPTS)
 URL_SETTINGS_FIELDS: frozenset[str] = frozenset({"telegram_url", "instagram_url"})
@@ -182,14 +184,16 @@ FIELD_ATTR: dict[str, str] = {
     "instagram_url": "instagram_url",
     "logo":          "logo_url",
     "promo_text":    "promo_text",
+    "background_image": "background_image_url",
 }
 
 # ── Toggle fields (boolean ShopSettings columns) ──────────────────────────────
-TOGGLE_FIELDS: frozenset[str] = frozenset({"show_promo_bar", "show_lang_switch", "show_banner"})
+TOGGLE_FIELDS: frozenset[str] = frozenset({"show_promo_bar", "show_lang_switch", "show_banner", "show_background_image"})
 TOGGLE_LABELS: dict[str, str] = {
-    "show_promo_bar":   "Промо-бар",
-    "show_lang_switch": "Перемикач мови",
-    "show_banner":      "Банер",
+    "show_promo_bar":         "Промо-бар",
+    "show_lang_switch":       "Перемикач мови",
+    "show_banner":            "Банер",
+    "show_background_image":  "Задній фон",
 }
 
 
@@ -211,9 +215,11 @@ def _settings_text(shop: ShopSettings | None) -> str:
         f"📸 Instagram: {_v(shop.instagram_url if shop else None)}\n"
         f"🖼 Логотип: {'✅ є' if (shop and shop.logo_url) else '<i>немає</i>'}\n"
         f"📢 Бігучий рядок: {_v(shop.promo_text if shop else None)}\n"
+        f"🌄 Задній фон: {'✅ є' if (shop and shop.background_image_url) else '<i>немає</i>'}\n"
         f"🔛 Промо-бар: {_on(shop.show_promo_bar if shop is not None else True)}\n"
         f"🌐 Перемикач мови: {_on(shop.show_lang_switch if shop is not None else True)}\n"
         f"🖼 Банер: {_on(shop.show_banner if shop is not None else True)}\n"
+        f"👁 Фон: {_on(shop.show_background_image if shop is not None else True)}\n"
         f"🎨 Тема: {THEMES.get(theme, theme)}\n\n"
         f"Натисніть кнопку, щоб змінити:"
     )
@@ -222,9 +228,11 @@ def _settings_text(shop: ShopSettings | None) -> str:
 def _settings_overview_kb(shop: ShopSettings | None = None) -> InlineKeyboardMarkup:
     def _bi(val: bool) -> str:
         return "✅" if val else "❌"
-    sp = shop.show_promo_bar   if shop is not None else True
-    sl = shop.show_lang_switch if shop is not None else True
-    sb = shop.show_banner      if shop is not None else True
+    sp  = shop.show_promo_bar        if shop is not None else True
+    sl  = shop.show_lang_switch      if shop is not None else True
+    sb  = shop.show_banner           if shop is not None else True
+    sbg = shop.show_background_image if shop is not None else True
+    has_bg = bool(shop and shop.background_image_url)
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="🏪 Назва магазину",               callback_data="cms:set:shop_title")],
@@ -238,9 +246,17 @@ def _settings_overview_kb(shop: ShopSettings | None = None) -> InlineKeyboardMar
             [InlineKeyboardButton(text="🖼 Логотип",                      callback_data="cms:set:logo")],
             [InlineKeyboardButton(text="🎨 Тема сайту",                   callback_data="cms:set:theme")],
             [InlineKeyboardButton(text="📢 Бігучий рядок",                callback_data="cms:set:promo_text")],
+            [InlineKeyboardButton(
+                text=f"🌄 {'✅ ' if has_bg else ''}Задній фон сайту",
+                callback_data="cms:set:background_image",
+            )],
             [InlineKeyboardButton(text=f"{_bi(sp)} Промо-бар",           callback_data="cms:toggle:show_promo_bar")],
             [InlineKeyboardButton(text=f"{_bi(sl)} Перемикач мови",      callback_data="cms:toggle:show_lang_switch")],
             [InlineKeyboardButton(text=f"{_bi(sb)} Банер",               callback_data="cms:toggle:show_banner")],
+            [InlineKeyboardButton(
+                text=f"{_bi(sbg)} {'Приховати фон' if sbg else 'Показувати фон'}",
+                callback_data="cms:toggle:show_background_image",
+            )],
         ]
     )
 
@@ -788,16 +804,17 @@ class CmsAddProduct(StatesGroup):
 
 
 class CmsSettings(StatesGroup):
-    shop_title    = State()
-    phone         = State()
-    phone2        = State()
-    viber_url     = State()
-    subtitle      = State()
-    address       = State()
-    telegram_url  = State()
-    instagram_url = State()
-    logo          = State()
-    promo_text    = State()
+    shop_title       = State()
+    phone            = State()
+    phone2           = State()
+    viber_url        = State()
+    subtitle         = State()
+    address          = State()
+    telegram_url     = State()
+    instagram_url    = State()
+    logo             = State()
+    promo_text       = State()
+    background_image = State()
 
 
 class CmsEditProduct(StatesGroup):
@@ -1694,6 +1711,46 @@ async def cms_logo_url_input(message: Message, state: FSMContext) -> None:
         )
         return
     shop = await _save_settings_field("logo", val)
+    await state.clear()
+    await message.answer(_settings_text(shop), parse_mode="HTML", reply_markup=_settings_overview_kb(shop))
+
+
+# ── FSM: background image ─────────────────────────────────────────────────────
+
+@router.message(StateFilter(CmsSettings.background_image), F.photo)
+async def cms_bg_photo(message: Message, state: FSMContext) -> None:
+    from app.config import settings as app_settings
+    if not _is_cloudinary_configured():
+        await message.answer(
+            "📷 Cloudinary не налаштований.\nНадішліть URL посилання на зображення або натисніть «Скасувати»:",
+            reply_markup=_cancel_input_kb("background_image"),
+        )
+        return
+    photo = message.photo[-1]
+    folder = f"{app_settings.cloudinary_folder}/backgrounds"
+    url = await _download_and_upload(message.bot, photo.file_id, folder=folder, kind="background")
+    if not url:
+        await message.answer("⚠️ Не вдалось завантажити фото. Спробуйте URL або скасуйте:", reply_markup=_cancel_input_kb("background_image"))
+        return
+    shop = await _save_settings_field("background_image", url)
+    await state.clear()
+    await message.answer(_settings_text(shop), parse_mode="HTML", reply_markup=_settings_overview_kb(shop))
+
+
+@router.message(StateFilter(CmsSettings.background_image))
+async def cms_bg_url_input(message: Message, state: FSMContext) -> None:
+    val = (message.text or "").strip()
+    if not val:
+        await message.answer("Введіть URL або надішліть фото:")
+        return
+    if not (val.startswith("https://") or val.startswith("http://")):
+        await message.answer(
+            "❌ URL має починатись з <code>https://</code> або <code>http://</code>",
+            parse_mode="HTML",
+            reply_markup=_cancel_input_kb("background_image"),
+        )
+        return
+    shop = await _save_settings_field("background_image", val)
     await state.clear()
     await message.answer(_settings_text(shop), parse_mode="HTML", reply_markup=_settings_overview_kb(shop))
 

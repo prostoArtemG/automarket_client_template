@@ -62,7 +62,7 @@
 <!-- ║  HERO BANNER                                 ║ -->
 <!-- ╚══════════════════════════════════════════════╝ -->
 {% if client.show_banner %}
-<section class="hero-banner">
+<section class="hero-banner"{% if client.background_image_url and client.show_background_image %} style="--bg-image: url('{{ client.background_image_url }}')"{% endif %}>
   <div class="hero-glow hero-glow-1"></div>
   <div class="hero-glow hero-glow-2"></div>
   <div class="hero-content">
