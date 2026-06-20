@@ -71,26 +71,36 @@ html:has(body[data-theme="dark_parallax"]) {
 [data-theme="dark_parallax"] .header-phone a { color: #9ca3af; }
 
 /* ── Hero — CSS parallax + layered glows ── */
+/* Base: scenic aurora dark gradient (no customer image) */
 [data-theme="dark_parallax"] .hero-banner {
-    background:
-        var(--bg-image, none) center/cover no-repeat,
-        radial-gradient(ellipse 70% 60% at 50% 50%, rgba(22,163,74,.22) 0%, transparent 62%),
-        radial-gradient(ellipse 40% 40% at 20% 70%, rgba(16,185,129,.12) 0%, transparent 55%),
-        radial-gradient(ellipse 40% 40% at 80% 25%, rgba(22,163,74,.10) 0%, transparent 55%),
-        linear-gradient(160deg, #0c1f0f 0%, #060e06 50%, #0b120b 100%);
+    background-color: #050e06;
+    background-image:
+        radial-gradient(ellipse 130% 55% at 50% -8%, rgba(22,163,74,.22) 0%, transparent 55%),
+        radial-gradient(ellipse 45% 65% at 2%  65%, rgba(5,150,50,.11)  0%, transparent 55%),
+        radial-gradient(ellipse 55% 45% at 98% 38%, rgba(16,185,129,.09) 0%, transparent 55%),
+        radial-gradient(ellipse 30% 30% at 70% 90%, rgba(22,163,74,.07)  0%, transparent 50%),
+        linear-gradient(175deg, #041208 0%, #071d0c 28%, #050f07 58%, #030806 100%);
     background-attachment: fixed, fixed, fixed, fixed, fixed;
-    background-size: cover, cover, cover, cover, cover;
+    background-size: cover;
+    background-position: center;
     position: relative;
     overflow: hidden;
 }
-/* Extra dark overlay when custom background image is active */
-[data-theme="dark_parallax"] .hero-banner[style*="--bg-image"]::before {
-    content: '';
-    position: absolute; inset: 0;
-    background: rgba(5, 9, 5, 0.62);
-    pointer-events: none;
-    z-index: 1;
+/* When customer uploads a background image via CMS */
+[data-theme="dark_parallax"] .hero-banner[style*="--bg-image"] {
+    background-color: #050e06;
+    background-image:
+        radial-gradient(ellipse 130% 55% at 50% -8%, rgba(22,163,74,.18) 0%, transparent 55%),
+        radial-gradient(ellipse 45% 65% at 2%  65%, rgba(5,150,50,.09)  0%, transparent 55%),
+        radial-gradient(ellipse 55% 45% at 98% 38%, rgba(16,185,129,.07) 0%, transparent 55%),
+        /* dark vignette so text stays readable over any image */
+        linear-gradient(rgba(4,9,5,.68), rgba(4,9,5,.68)),
+        var(--bg-image);
+    background-attachment: fixed, fixed, fixed, fixed, fixed;
+    background-size: cover, cover, cover, cover, cover;
+    background-position: center;
 }
+/* Ambient edge glows (always on, z-index 0 — behind content) */
 [data-theme="dark_parallax"] .hero-banner::after {
     content: '';
     position: absolute; inset: 0;

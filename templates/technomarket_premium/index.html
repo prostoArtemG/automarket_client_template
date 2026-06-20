@@ -5,11 +5,32 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ client.shop_title }}</title>
   <meta name="description" content="{{ client.shop_title }} — інтернет-магазин побутової техніки">
-  <link rel="stylesheet" href="/static/css/technomarket_premium.css">
+  <link rel="stylesheet" href="/static/css/technomarket_premium.css?v={{ client.theme_name or 'default' }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 </head>
 <body data-theme="{{ client.theme_name or 'default' }}">
+{#-- Emoji lookup: maps lowercase group/category names to emoji icons --#}
+{% macro cat_emoji(name) -%}
+{%- set nm = (name or '') | lower -%}
+{%- set _m = {
+  "бойлери": "🔥",
+  "холодильники": "🧊",
+  "пральні машини": "🧺",
+  "кондиціонери": "❄️",
+  "обігрівачі": "🔥",
+  "витяжки": "🏭",
+  "газові плити": "🍳",
+  "мікрохвильовки": "📡",
+  "пилосос": "🧹",
+  "пилососи": "🧹",
+  "кавомашини": "☕",
+  "кавоварки": "☕",
+  "інша техніка": "📦",
+  "всі товари": "📦"
+} -%}
+{{- _m[nm] if nm in _m else "🏷️" -}}
+{%- endmacro %}
 
 <!-- ╔══════════════════════════════════════════════╗ -->
 <!-- ║  PROMO BAR                                   ║ -->
@@ -95,7 +116,7 @@
         {% set ns.seen = ns.seen + [p.group_name] %}
         <a href="#" class="site-category-card" data-filter-group="{{ p.group_name }}"
            onclick="filterByGroup('{{ p.group_name | replace("'", "\\'") }}', this); return false;">
-          <div class="site-category-emoji">🏷️</div>
+          <div class="site-category-emoji">{{ cat_emoji(p.group_name) }}</div>
           <div class="site-category-title">{{ p.group_name }}</div>
         </a>
       {% endif %}
@@ -120,7 +141,7 @@
         {% set ns4.cats = ns4.cats + [p.category] %}
         <a href="#" class="dp-cat-card" data-filter-cat="{{ p.category }}"
            onclick="filterByCategory('{{ p.category | replace("'", "\\'") }}', this); return false;">
-          <div class="dp-cat-emoji">🏷️</div>
+          <div class="dp-cat-emoji">{{ cat_emoji(p.category) }}</div>
           <div class="dp-cat-title">{{ p.category }}</div>
         </a>
       {% endif %}

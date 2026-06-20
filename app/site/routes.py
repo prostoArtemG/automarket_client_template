@@ -264,6 +264,22 @@ async def shop_product(
 # POST /api/event  — Site analytics event (add-to-cart, etc.)
 # ---------------------------------------------------------------------------
 
+@router.get("/api/diag/settings")
+async def diag_settings() -> dict:
+    """Diagnostics endpoint — shows current ShopSettings without sensitive data."""
+    client = await _get_shop_data()
+    return {
+        "theme_name": client.get("theme_name"),
+        "background_image_url": client.get("background_image_url"),
+        "show_background_image": client.get("show_background_image"),
+        "shop_title": client.get("shop_title"),
+        "subtitle": client.get("subtitle"),
+        "show_banner": client.get("show_banner"),
+        "show_promo_bar": client.get("show_promo_bar"),
+        "logo_url": client.get("logo_url"),
+    }
+
+
 @router.post("/api/event")
 async def record_event(request: Request) -> dict:
     try:
