@@ -131,13 +131,12 @@
 /* ================================================================
    DARK PARALLAX — GROUPS row (single horizontal scroll line)
    ================================================================ */
-
-/* Hide old margin on site-categories for dark_parallax */
 [data-theme="dark_parallax"] .site-categories {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: nowrap;
-    overflow-x: auto;
+    /* Force flex — overrides base display:grid */
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
     overflow-y: visible;
     gap: 10px;
     max-height: none;
@@ -148,7 +147,6 @@
     scrollbar-width: thin;
     scrollbar-color: rgba(22,163,74,.3) transparent;
     -webkit-overflow-scrolling: touch;
-    /* Grid cols reset from default */
     grid-template-columns: unset;
 }
 [data-theme="dark_parallax"] .site-categories::-webkit-scrollbar { height: 3px; }
@@ -194,13 +192,13 @@
     width: 210px;
     height: 88px;
     aspect-ratio: unset;
-    display: flex;
+    display: flex !important;
     flex-direction: row;
     align-items: center;
     gap: 12px;
     padding: 0 18px;
     border-radius: 14px;
-    text-align: left;
+    text-align: left;        /* override base text-align:center */
     text-decoration: none;
     color: #c9d1d9;
     background: rgba(255,255,255,.04);
@@ -258,27 +256,35 @@
 }
 
 /* ================================================================
-   DARK PARALLAX — CATEGORIES grid (square cards, 5–6 per row)
+   DARK PARALLAX — CATEGORIES grid (square cards, flex-wrap)
+   FIX: flex instead of grid to avoid empty-column space with few cards
    ================================================================ */
 [data-theme="dark_parallax"] .dp-cats-wrap {
-    display: block;
+    display: block !important; /* override base display:none */
+    width: 100%;
     margin: 0 auto;
 }
 [data-theme="dark_parallax"] .dp-cats-grid {
     max-width: 1140px;
     margin: 0 auto;
     padding: 0 20px 4px;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    /* Flex-wrap: cards don't stretch/leave gaps when few exist */
+    display: flex !important;
+    flex-wrap: wrap;
     gap: 10px;
-    /* Default: show first 2 rows */
-    max-height: 280px;
-    overflow: hidden;
-    transition: max-height .45s cubic-bezier(.4,0,.2,1);
+    align-items: flex-start;
+    /* Desktop: show all — no max-height restriction */
+    max-height: none;
+    overflow: visible;
+    transition: none;
 }
-[data-theme="dark_parallax"] .dp-cats-grid.dp-nav-expanded { max-height: 2400px; }
+/* Expanded state not needed on desktop, kept for mobile compat */
+[data-theme="dark_parallax"] .dp-cats-grid.dp-nav-expanded { max-height: none; }
 
 [data-theme="dark_parallax"] .dp-cat-card {
+    /* Fixed size: ~6-7 per row on desktop, no stretching */
+    flex: 0 0 150px;
+    width: 150px;
     background: rgba(255,255,255,.04);
     border: 1.5px solid rgba(255,255,255,.07);
     border-radius: 16px;
@@ -445,11 +451,10 @@
 [data-theme="dark_parallax"] .card h2 { color: #f3f4f6; }
 [data-theme="dark_parallax"] .card-brand { color: #6b7280; font-size: .8em; }
 [data-theme="dark_parallax"] .category { color: #4b5563; }
-/* Photo area: no overlay, clean dark bg */
+/* Photo area: keep bg subtle — do NOT darken the actual image */
 [data-theme="dark_parallax"] .no-photo { background: rgba(255,255,255,.04); color: #4b5563; }
 [data-theme="dark_parallax"] .product-img {
-    background: rgba(6,10,6,.6);
-    /* Do NOT darken the actual photo */
+    background: rgba(10,16,10,.25); /* very subtle bg, not dark */
 }
 [data-theme="dark_parallax"] .product-img img { filter: none; }
 /* Price — use accent green, high contrast */
@@ -578,7 +583,7 @@
 
 /* ── Mobile layout for dark_parallax ── */
 @media (max-width: 768px) {
-    /* Prevent any horizontal overflow from groups row */
+    /* Prevent horizontal overflow from groups row */
     [data-theme="dark_parallax"] .dp-groups-wrap,
     [data-theme="dark_parallax"] .dp-cats-wrap {
         overflow-x: hidden;
@@ -586,36 +591,46 @@
     [data-theme="dark_parallax"] .site-categories {
         padding: 0 14px 8px;
         gap: 8px;
-        /* Keep flex nowrap + scroll contained */
         overscroll-behavior-x: contain;
     }
     [data-theme="dark_parallax"] .site-category-card {
-        width: auto;
+        width: auto !important;
         min-width: 120px;
         max-width: 170px;
         height: 52px;
         border-radius: 10px;
         padding: 0 12px;
         gap: 8px;
-        /* Reset desktop animation shimmer */
         backdrop-filter: blur(10px);
         -webkit-backdrop-filter: blur(10px);
     }
     [data-theme="dark_parallax"] .site-category-card .site-category-emoji { font-size: 19px; }
     [data-theme="dark_parallax"] .site-category-card .site-category-title  { font-size: 12px; }
 
-    /* Categories: 2-column square grid */
+    /* Categories mobile: 2-column fixed grid, collapse to 240px */
     [data-theme="dark_parallax"] .dp-cats-grid {
-        grid-template-columns: repeat(2, 1fr);
+        /* Switch back to grid on mobile for even 2-col layout */
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important;
         gap: 8px;
         padding: 0 14px 6px;
         max-height: 240px;
+        overflow: hidden;
+        transition: max-height .4s ease;
+    }
+    [data-theme="dark_parallax"] .dp-cats-grid.dp-nav-expanded {
+        max-height: 2400px;
+    }
+    /* Reset flex: 0 0 150px from desktop on mobile */
+    [data-theme="dark_parallax"] .dp-cat-card {
+        flex: unset;
+        width: 100%;
     }
     [data-theme="dark_parallax"] .dp-cat-emoji { font-size: 24px; }
     [data-theme="dark_parallax"] .dp-cat-title { font-size: 11px; }
     [data-theme="dark_parallax"] .dp-nav-header { padding: 8px 14px 4px; }
 
-    /* Product cards mobile: readable, no overflow */
+    /* Product cards mobile */
     [data-theme="dark_parallax"] .card {
         backdrop-filter: blur(8px);
         -webkit-backdrop-filter: blur(8px);
