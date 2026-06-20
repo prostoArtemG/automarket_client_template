@@ -31,6 +31,7 @@ from sqlalchemy import delete, func, or_, select
 from app.bot.filters import AdminFilter
 from app.bot.keyboards import (
     BTN_CMS_ADMINS,
+    BTN_CMS_EMOJI,
     BTN_CMS_FILTERS,
     BTN_CMS_ORDERS,
     BTN_CMS_PRODUCTS,
@@ -39,8 +40,10 @@ from app.bot.keyboards import (
     BTN_CMS_STATS,
     main_menu,
 )
+from app.category_meta import category_emoji as _cat_emoji_fb
+from app.category_meta import group_emoji as _grp_emoji_fb
 from app.db import AsyncSessionLocal
-from app.models import CategorySpec, Order, Product, ProductImage, ProductSpec, ShopAdmin, ShopSettings, SiteEvent
+from app.models import CategorySpec, NavCategory, NavGroup, Order, Product, ProductImage, ProductSpec, ShopAdmin, ShopSettings, SiteEvent
 
 logger = logging.getLogger(__name__)
 
@@ -835,9 +838,17 @@ class CmsFilters(StatesGroup):
     spec_list       = State()  # viewing/toggling specs for a selected category
 
 
+class CmsEmojiNav(StatesGroup):
+    overview    = State()  # main Групи/Категорії menu
+    group_list  = State()  # browsing product groups
+    group_input = State()  # waiting for new emoji for a group
+    cat_list    = State()  # browsing product categories
+    cat_input   = State()  # waiting for new emoji for a category
+
+
 # ── /cancel ────────────────────────────────────────────────────────────────────
 
-@router.message(StateFilter(CmsAddProduct, CmsSettings, CmsEditProduct, CmsProductSearch, CmsProductPhotos, CmsFilters), Command("cancel"))
+@router.message(StateFilter(CmsAddProduct, CmsSettings, CmsEditProduct, CmsProductSearch, CmsProductPhotos, CmsFilters, CmsEmojiNav), Command("cancel"))
 async def cms_cancel(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer("Скасовано.", reply_markup=main_menu())
@@ -2914,3 +2925,286 @@ async def cms_admins_del(cb: CallbackQuery, state: FSMContext) -> None:
         reply_markup=_admins_kb(db_admins),
     )
     await cb.answer(f"🗑 Адміна {del_tid} видалено")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── 🗂 Групи / Категорії — управління emoji ───────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── helpers ──────────────────────────────────────────────────────────────────
+
+async def _nav_current_group_emoji(name: str) -> str:
+    """Return emoji for a group: DB row if set, else static fallback."""
+    async with AsyncSessionLocal() as session:
+        row = (await session.scalars(
+            select(NavGroup).where(NavGroup.name == name)
+        )).first()
+    if row and row.emoji:
+        return row.emoji
+    return _grp_emoji_fb(name)
+
+
+async def _nav_current_cat_emoji(name: str) -> str:
+    """Return emoji for a category: DB row if set, else static fallback."""
+    async with AsyncSessionLocal() as session:
+        row = (await session.scalars(
+            select(NavCategory).where(NavCategory.name == name)
+        )).first()
+    if row and row.emoji:
+        return row.emoji
+    return _cat_emoji_fb(name)
+
+
+async def _nav_find_group_for_cat(category: str) -> str | None:
+    """Find the group_name of the first product with this category."""
+    async with AsyncSessionLocal() as session:
+        row = (await session.scalars(
+            select(Product.group_name)
+            .where(Product.category == category, Product.group_name.isnot(None))
+            .limit(1)
+        )).first()
+    return row or None
+
+
+# ── overview ─────────────────────────────────────────────────────────────────
+
+def _nav_overview_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🗂 Групи товарів",  callback_data="cms:nav:groups")],
+        [InlineKeyboardButton(text="📋 Категорії",      callback_data="cms:nav:cats")],
+        [InlineKeyboardButton(text="↩️ Закрити",        callback_data="cms:nav:close")],
+    ])
+
+
+@router.message(F.text == BTN_CMS_EMOJI)
+async def cms_emoji_nav(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await state.set_state(CmsEmojiNav.overview)
+    await message.answer(
+        "🗂 <b>Групи / Категорії</b>\n\n"
+        "Оберіть розділ для редагування emoji:",
+        parse_mode="HTML",
+        reply_markup=_nav_overview_kb(),
+    )
+
+
+@router.callback_query(F.data == "cms:nav:close", StateFilter(CmsEmojiNav))
+async def cms_nav_close(cb: CallbackQuery, state: FSMContext) -> None:
+    await cb.answer()
+    await state.clear()
+    try:
+        await cb.message.delete()
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data == "cms:nav:menu", StateFilter(CmsEmojiNav))
+async def cms_nav_back_to_menu(cb: CallbackQuery, state: FSMContext) -> None:
+    await cb.answer()
+    await state.set_state(CmsEmojiNav.overview)
+    await cb.message.edit_text(
+        "🗂 <b>Групи / Категорії</b>\n\n"
+        "Оберіть розділ для редагування emoji:",
+        parse_mode="HTML",
+        reply_markup=_nav_overview_kb(),
+    )
+
+
+# ── groups list ───────────────────────────────────────────────────────────────
+
+async def _nav_show_groups(target: Message | CallbackQuery, state: FSMContext) -> None:
+    """Display product groups with current emoji for selection."""
+    async with AsyncSessionLocal() as session:
+        group_names: list[str] = sorted(filter(None, (
+            await session.scalars(
+                select(Product.group_name).distinct().where(Product.group_name.isnot(None))
+            )
+        ).all()))
+        nav_rows = {
+            r.name: r.emoji
+            for r in (await session.scalars(select(NavGroup))).all()
+            if r.emoji
+        }
+
+    await state.update_data(nav_groups=group_names)
+    await state.set_state(CmsEmojiNav.group_list)
+
+    if not group_names:
+        text = (
+            "🗂 <b>Групи товарів</b>\n\n"
+            "<i>Груп не знайдено. Спочатку додайте товари з заповненою групою.</i>"
+        )
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="↩️ Назад", callback_data="cms:nav:menu")],
+        ])
+    else:
+        text = "🗂 <b>Групи товарів</b>\nОберіть групу для зміни emoji:"
+        buttons = []
+        for i, name in enumerate(group_names):
+            emo = nav_rows.get(name) or _grp_emoji_fb(name)
+            buttons.append([InlineKeyboardButton(
+                text=f"{emo}  {name}",
+                callback_data=f"cms:nav:g:{i}",
+            )])
+        buttons.append([InlineKeyboardButton(text="↩️ Назад", callback_data="cms:nav:menu")])
+        kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+    if isinstance(target, CallbackQuery):
+        await target.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+    else:
+        await target.answer(text, parse_mode="HTML", reply_markup=kb)
+
+
+@router.callback_query(F.data == "cms:nav:groups", StateFilter(CmsEmojiNav))
+async def cms_nav_groups(cb: CallbackQuery, state: FSMContext) -> None:
+    await cb.answer()
+    await _nav_show_groups(cb, state)
+
+
+@router.callback_query(F.data.startswith("cms:nav:g:"), StateFilter(CmsEmojiNav.group_list))
+async def cms_nav_group_select(cb: CallbackQuery, state: FSMContext) -> None:
+    await cb.answer()
+    try:
+        idx = int(cb.data.split(":")[-1])
+    except ValueError:
+        return
+    data = await state.get_data()
+    groups: list[str] = data.get("nav_groups", [])
+    if idx >= len(groups):
+        return
+    name = groups[idx]
+    cur_emo = await _nav_current_group_emoji(name)
+    await state.update_data(nav_editing_name=name)
+    await state.set_state(CmsEmojiNav.group_input)
+    await cb.message.edit_text(
+        f"🗂 Група: <b>{name}</b>\n\n"
+        f"Поточний emoji: {cur_emo}\n\n"
+        "Надішліть новий emoji (або будь-який текст до 16 символів):",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="↩️ Назад до груп", callback_data="cms:nav:groups")],
+        ]),
+    )
+
+
+@router.message(StateFilter(CmsEmojiNav.group_input), F.text)
+async def cms_nav_group_emoji_input(message: Message, state: FSMContext) -> None:
+    emoji_text = (message.text or "").strip()[:16]
+    if not emoji_text:
+        await message.answer("Порожній текст. Надішліть emoji або символ.")
+        return
+    data = await state.get_data()
+    name: str = data.get("nav_editing_name", "")
+    async with AsyncSessionLocal() as session:
+        row = (await session.scalars(
+            select(NavGroup).where(NavGroup.name == name)
+        )).first()
+        if row is None:
+            session.add(NavGroup(name=name, emoji=emoji_text))
+        else:
+            row.emoji = emoji_text
+        await session.commit()
+    await message.answer(f"✅ Emoji оновлено: {emoji_text} {name}")
+    await _nav_show_groups(message, state)
+
+
+# ── categories list ───────────────────────────────────────────────────────────
+
+async def _nav_show_cats(target: Message | CallbackQuery, state: FSMContext) -> None:
+    """Display product categories with current emoji for selection."""
+    async with AsyncSessionLocal() as session:
+        cat_names: list[str] = sorted(filter(None, (
+            await session.scalars(
+                select(Product.category).distinct().where(Product.category.isnot(None))
+            )
+        ).all()))
+        nav_rows = {
+            r.name: r.emoji
+            for r in (await session.scalars(select(NavCategory))).all()
+            if r.emoji
+        }
+
+    await state.update_data(nav_cats=cat_names)
+    await state.set_state(CmsEmojiNav.cat_list)
+
+    if not cat_names:
+        text = (
+            "📋 <b>Категорії</b>\n\n"
+            "<i>Категорій не знайдено. Спочатку додайте товари з категорією.</i>"
+        )
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="↩️ Назад", callback_data="cms:nav:menu")],
+        ])
+    else:
+        text = "📋 <b>Категорії</b>\nОберіть категорію для зміни emoji:"
+        buttons = []
+        for i, name in enumerate(cat_names):
+            emo = nav_rows.get(name) or _cat_emoji_fb(name)
+            buttons.append([InlineKeyboardButton(
+                text=f"{emo}  {name}",
+                callback_data=f"cms:nav:c:{i}",
+            )])
+        buttons.append([InlineKeyboardButton(text="↩️ Назад", callback_data="cms:nav:menu")])
+        kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+    if isinstance(target, CallbackQuery):
+        await target.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+    else:
+        await target.answer(text, parse_mode="HTML", reply_markup=kb)
+
+
+@router.callback_query(F.data == "cms:nav:cats", StateFilter(CmsEmojiNav))
+async def cms_nav_cats(cb: CallbackQuery, state: FSMContext) -> None:
+    await cb.answer()
+    await _nav_show_cats(cb, state)
+
+
+@router.callback_query(F.data.startswith("cms:nav:c:"), StateFilter(CmsEmojiNav.cat_list))
+async def cms_nav_cat_select(cb: CallbackQuery, state: FSMContext) -> None:
+    await cb.answer()
+    try:
+        idx = int(cb.data.split(":")[-1])
+    except ValueError:
+        return
+    data = await state.get_data()
+    cats: list[str] = data.get("nav_cats", [])
+    if idx >= len(cats):
+        return
+    name = cats[idx]
+    cur_emo = await _nav_current_cat_emoji(name)
+    await state.update_data(nav_editing_name=name)
+    await state.set_state(CmsEmojiNav.cat_input)
+    await cb.message.edit_text(
+        f"📋 Категорія: <b>{name}</b>\n\n"
+        f"Поточний emoji: {cur_emo}\n\n"
+        "Надішліть новий emoji (або будь-який текст до 16 символів):",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="↩️ Назад до категорій", callback_data="cms:nav:cats")],
+        ]),
+    )
+
+
+@router.message(StateFilter(CmsEmojiNav.cat_input), F.text)
+async def cms_nav_cat_emoji_input(message: Message, state: FSMContext) -> None:
+    emoji_text = (message.text or "").strip()[:16]
+    if not emoji_text:
+        await message.answer("Порожній текст. Надішліть emoji або символ.")
+        return
+    data = await state.get_data()
+    name: str = data.get("nav_editing_name", "")
+    group_name = await _nav_find_group_for_cat(name)
+    async with AsyncSessionLocal() as session:
+        row = (await session.scalars(
+            select(NavCategory).where(NavCategory.name == name)
+        )).first()
+        if row is None:
+            session.add(NavCategory(name=name, emoji=emoji_text, group_name=group_name))
+        else:
+            row.emoji = emoji_text
+            if group_name and not row.group_name:
+                row.group_name = group_name
+        await session.commit()
+    await message.answer(f"✅ Emoji оновлено: {emoji_text} {name}")
+    await _nav_show_cats(message, state)
+
