@@ -75,25 +75,58 @@
 {% endif %}
 
 <!-- ╔══════════════════════════════════════════════╗ -->
-<!-- ║  CATEGORY TABS                               ║ -->
+<!-- ║  GROUPS NAV + CATEGORY CARDS                 ║ -->
 <!-- ╚══════════════════════════════════════════════╝ -->
-<section class="site-categories" id="categoryNav" aria-label="Категорії">
-  <a href="#" class="site-category-card active" data-filter-group="" onclick="filterByGroup('', this); return false;">
-    <div class="site-category-emoji">📦</div>
-    <div class="site-category-title" data-ru="Все товары" data-uk="Всі товари">Всі товари</div>
-  </a>
-  {% set ns = namespace(seen=[]) %}
-  {% for p in products %}
-    {% if p.group_name and p.group_name not in ns.seen %}
-      {% set ns.seen = ns.seen + [p.group_name] %}
-      <a href="#" class="site-category-card" data-filter-group="{{ p.group_name }}"
-         onclick="filterByGroup('{{ p.group_name | replace("'", "\\'") }}', this); return false;">
-        <div class="site-category-emoji">🏷️</div>
-        <div class="site-category-title">{{ p.group_name }}</div>
-      </a>
-    {% endif %}
-  {% endfor %}
-</section>
+
+<!-- dark_parallax: label + expand button (hidden for other themes via CSS) -->
+<div class="dp-nav-wrap dp-groups-wrap">
+  <div class="dp-nav-header">
+    <span class="dp-nav-label" data-ru="Группы товаров" data-uk="Групи товарів">Групи товарів</span>
+    <button type="button" class="dp-show-all-btn" id="dpGroupsToggle" onclick="dpToggleShowAll('groups')">Показати всі ↓</button>
+  </div>
+  <section class="site-categories" id="categoryNav" aria-label="Категорії">
+    <a href="#" class="site-category-card active" data-filter-group="" onclick="filterByGroup('', this); return false;">
+      <div class="site-category-emoji">📦</div>
+      <div class="site-category-title" data-ru="Все товары" data-uk="Всі товари">Всі товари</div>
+    </a>
+    {% set ns = namespace(seen=[]) %}
+    {% for p in products %}
+      {% if p.group_name and p.group_name not in ns.seen %}
+        {% set ns.seen = ns.seen + [p.group_name] %}
+        <a href="#" class="site-category-card" data-filter-group="{{ p.group_name }}"
+           onclick="filterByGroup('{{ p.group_name | replace("'", "\\'") }}', this); return false;">
+          <div class="site-category-emoji">🏷️</div>
+          <div class="site-category-title">{{ p.group_name }}</div>
+        </a>
+      {% endif %}
+    {% endfor %}
+  </section>
+</div>
+
+<!-- dark_parallax: categories sub-section (hidden for default theme via CSS) -->
+<div class="dp-cats-wrap" id="dpCatsWrap">
+  <div class="dp-nav-header">
+    <span class="dp-nav-label" data-ru="Категории" data-uk="Категорії">Категорії</span>
+    <button type="button" class="dp-show-all-btn" id="dpCatsToggle" onclick="dpToggleShowAll('cats')">Показати всі ↓</button>
+  </div>
+  <div class="dp-cats-grid" id="dpCatsGrid">
+    <a href="#" class="dp-cat-card dp-cat-active" data-filter-cat="" onclick="filterByCategory('', this); return false;">
+      <div class="dp-cat-emoji">📦</div>
+      <div class="dp-cat-title" data-ru="Все" data-uk="Всі">Всі</div>
+    </a>
+    {% set ns4 = namespace(cats=[]) %}
+    {% for p in products %}
+      {% if p.category and p.category not in ns4.cats %}
+        {% set ns4.cats = ns4.cats + [p.category] %}
+        <a href="#" class="dp-cat-card" data-filter-cat="{{ p.category }}"
+           onclick="filterByCategory('{{ p.category | replace("'", "\\'") }}', this); return false;">
+          <div class="dp-cat-emoji">🏷️</div>
+          <div class="dp-cat-title">{{ p.category }}</div>
+        </a>
+      {% endif %}
+    {% endfor %}
+  </div>
+</div>
 
 <!-- ╔══════════════════════════════════════════════╗ -->
 <!-- ║  CATALOG (sidebar + grid)                    ║ -->
@@ -197,6 +230,7 @@
       {% for product in products %}
       <div class="card"
            data-group="{{ product.group_name or '' }}"
+           data-category="{{ product.category or '' }}"
            data-brand="{{ product.brand or '' }}"
            data-price="{{ product.price | int }}"
            data-available="{{ 'true' if product.is_available else 'false' }}"
@@ -566,6 +600,7 @@ function submitOrder(e) {
 var _categoryFilters = {{ category_filters | tojson }};
 
 var _activeGroup = '';
+var _activeCategory = '';
 var _cards = [];
 
 function initCards() {
@@ -624,6 +659,24 @@ function filterByGroup(group, el) {
   applyFilters();
 }
 
+function filterByCategory(cat, el) {
+  _activeCategory = cat;
+  document.querySelectorAll('.dp-cat-card').forEach(function(c) {
+    c.classList.toggle('dp-cat-active', c.getAttribute('data-filter-cat') === cat);
+  });
+  applyFilters();
+}
+
+function dpToggleShowAll(section) {
+  var gridId = section === 'groups' ? 'categoryNav' : 'dpCatsGrid';
+  var btnId  = section === 'groups' ? 'dpGroupsToggle' : 'dpCatsToggle';
+  var grid = document.getElementById(gridId);
+  var btn  = document.getElementById(btnId);
+  if (!grid || !btn) return;
+  grid.classList.toggle('dp-nav-expanded');
+  btn.textContent = grid.classList.contains('dp-nav-expanded') ? 'Сховати ↑' : 'Показати всі ↓';
+}
+
 function applyFilters() {
   if (!_cards.length) initCards();
   var search = (document.getElementById('searchInput').value || '').toLowerCase();
@@ -652,6 +705,7 @@ function applyFilters() {
     var avail = card.getAttribute('data-available') === 'true';
     var group = card.getAttribute('data-group') || '';
     if (_activeGroup && group !== _activeGroup) return false;
+    if (_activeCategory && (card.getAttribute('data-category') || '') !== _activeCategory) return false;
     if (search && name.indexOf(search) === -1 && cardBrand.indexOf(search) === -1) return false;
     if (brand && cardBrand !== brand) return false;
     if (price < priceMin || price > priceMax) return false;
