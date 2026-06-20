@@ -39,10 +39,22 @@
    All overrides scoped to [data-theme="dark_parallax"].
    ============================================================ */
 
-/* ── Base ── */
-[data-theme="dark_parallax"] body {
+/* ── Base: body[data-theme] — fixes broken ancestor selector ── */
+/* data-theme IS on <body>, so [data-theme] body selector never matched! */
+body[data-theme="dark_parallax"] {
     background: #080d08;
     color: #e5e7eb;
+    min-height: 100vh;
+}
+/* Also cover <html> and all page-level wrappers */
+html:has(body[data-theme="dark_parallax"]) {
+    background: #080d08;
+}
+[data-theme="dark_parallax"] .catalog-layout,
+[data-theme="dark_parallax"] .catalog-content,
+[data-theme="dark_parallax"] .products,
+[data-theme="dark_parallax"] #catalog {
+    background: transparent;
 }
 
 /* ── Header ── */
@@ -567,6 +579,120 @@
 [data-theme="dark_parallax"] .site-footer a { color: #6b7280; }
 [data-theme="dark_parallax"] .site-footer a:hover { color: var(--accent); }
 [data-theme="dark_parallax"] .footer-section-title { color: #9ca3af; }
+
+/* ═══════════════════════════════════════════════════════════════
+   DARK PARALLAX — MISSING OVERRIDES (background conflicts fix)
+   All white/light backgrounds overridden with dark glass values.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Catalog sidebar (desktop @media min-width:769px has bg:#fff) ── */
+[data-theme="dark_parallax"] .catalog-layout .search-box {
+    background: rgba(5,9,5,.96) !important;
+    border: 1px solid rgba(255,255,255,.08) !important;
+    box-shadow: 0 4px 28px rgba(0,0,0,.4) !important;
+    scrollbar-color: rgba(22,163,74,.3) transparent;
+}
+
+/* ── Search filters row (base has background:#fff !important) ── */
+[data-theme="dark_parallax"] .search-filters-row {
+    background: rgba(255,255,255,.04) !important;
+    border: 1px solid rgba(255,255,255,.07) !important;
+    box-shadow: none !important;
+}
+
+/* ── Filters panel extras: header, footer, close btn ── */
+[data-theme="dark_parallax"] .filters-panel-header {
+    border-bottom-color: rgba(255,255,255,.07) !important;
+}
+[data-theme="dark_parallax"] .filters-panel-footer {
+    background: rgba(5,9,5,.97) !important;
+    border-top-color: rgba(255,255,255,.07) !important;
+}
+[data-theme="dark_parallax"] .filters-close-btn {
+    background: rgba(255,255,255,.08) !important;
+    color: #9ca3af !important;
+}
+[data-theme="dark_parallax"] .filters-close-btn:hover {
+    background: rgba(255,255,255,.14) !important;
+    color: #e5e7eb !important;
+}
+
+/* ── Details btn (base: background:#111827 — replace with glass) ── */
+[data-theme="dark_parallax"] .details-btn {
+    background: rgba(255,255,255,.07);
+    border: 1px solid rgba(255,255,255,.1);
+    color: #e5e7eb;
+}
+[data-theme="dark_parallax"] .details-btn:hover {
+    background: rgba(255,255,255,.13);
+    color: #fff;
+}
+
+/* ── Pagination <a> links (base: background:#e5e7eb) ── */
+[data-theme="dark_parallax"] .pagination a {
+    background: rgba(255,255,255,.06);
+    color: #6b7280;
+}
+[data-theme="dark_parallax"] .pagination a.active { background: var(--accent); color: #fff; }
+[data-theme="dark_parallax"] .pagination a:hover:not(.active) { background: rgba(255,255,255,.1); color: #e5e7eb; }
+
+/* ── Cart drawer ── */
+[data-theme="dark_parallax"] .cart-drawer {
+    background: #050a05;
+    border-left: 1px solid rgba(255,255,255,.08);
+    box-shadow: -8px 0 40px rgba(0,0,0,.55);
+    color: #e5e7eb;
+}
+[data-theme="dark_parallax"] .cart-drawer-header { border-bottom-color: rgba(255,255,255,.07); }
+[data-theme="dark_parallax"] .cart-drawer-title { color: #f3f4f6; }
+[data-theme="dark_parallax"] .cart-drawer-close {
+    background: rgba(255,255,255,.07) !important;
+    color: #9ca3af !important;
+}
+[data-theme="dark_parallax"] .cart-drawer-close:hover {
+    background: rgba(255,255,255,.13) !important;
+    color: #e5e7eb !important;
+}
+[data-theme="dark_parallax"] .cart-drawer-footer { border-top-color: rgba(255,255,255,.07); }
+[data-theme="dark_parallax"] .cart-drawer-empty { color: #4b5563; }
+[data-theme="dark_parallax"] .cart-total-row { color: #f3f4f6; }
+[data-theme="dark_parallax"] .cart-item {
+    background: rgba(255,255,255,.05);
+    border: 1px solid rgba(255,255,255,.07);
+}
+[data-theme="dark_parallax"] .cart-item-img { background: rgba(255,255,255,.06) !important; }
+[data-theme="dark_parallax"] .cart-item-name { color: #e5e7eb; }
+[data-theme="dark_parallax"] .qty-btn {
+    background: rgba(255,255,255,.08) !important;
+    border-color: rgba(255,255,255,.12) !important;
+    color: #e5e7eb !important;
+}
+[data-theme="dark_parallax"] .qty-btn:hover { border-color: var(--accent) !important; color: var(--accent) !important; }
+[data-theme="dark_parallax"] .qty-display { color: #e5e7eb; }
+
+/* ── Order modal ── */
+[data-theme="dark_parallax"] .order-modal-box {
+    background: #0b120b;
+    border: 1px solid rgba(255,255,255,.08);
+    box-shadow: 0 20px 60px rgba(0,0,0,.65);
+}
+[data-theme="dark_parallax"] .order-modal-title { color: #f3f4f6; }
+[data-theme="dark_parallax"] .order-modal-product {
+    background: rgba(255,255,255,.06);
+    color: #9ca3af;
+}
+[data-theme="dark_parallax"] .order-field label { color: #9ca3af; }
+[data-theme="dark_parallax"] .order-field input {
+    background: rgba(255,255,255,.06);
+    border-color: rgba(255,255,255,.12);
+    color: #e5e7eb;
+}
+[data-theme="dark_parallax"] .order-field input:focus { border-color: var(--accent); }
+[data-theme="dark_parallax"] .order-modal-close { color: #6b7280 !important; }
+[data-theme="dark_parallax"] .order-modal-close:hover { color: #9ca3af !important; }
+
+/* ── Lightbox ── */
+[data-theme="dark_parallax"] .img-lightbox-img { background: rgba(8,13,8,.9); }
 
 /* ── Mobile: disable fixed parallax (performance) ── */
 @media (max-width: 768px) {
