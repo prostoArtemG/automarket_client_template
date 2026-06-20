@@ -134,10 +134,11 @@ async def _download_and_upload(bot: Bot, file_id: str, folder: str, kind: str = 
 # ── Themes ───────────────────────────────────────────────────────────────────
 
 THEMES: dict[str, str] = {
-    "default":     "🌱 За замовчуванням (зелена)",
-    "light_red":   "🔴 Червоне світло (світла)",
-    "navy_teal":   "🌊 Темно-синя + бірюза",
-    "purple_lime": "🟣 Фіолетова + лайм",
+    "default":      "🌱 За замовчуванням (зелена)",
+    "light_red":    "🔴 Червоне світло (світла)",
+    "navy_teal":    "🌊 Темно-синя + бірюза",
+    "purple_lime":  "🟣 Фіолетова + лайм",
+    "dark_parallax":"🌌 Темний паралакс",
 }
 VALID_THEMES: frozenset[str] = frozenset(THEMES)
 
