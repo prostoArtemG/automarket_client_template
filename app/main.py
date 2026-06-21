@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.bot.bot import create_bot, create_dispatcher
 from app.config import settings
-from app.db import close_db, init_db
+from app.db import close_db, init_db, init_shop_settings
 from app.api import router as api_router
 from app.site.routes import router as site_router
 
@@ -22,6 +22,7 @@ logger = logging.getLogger("technomarket_client")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    await init_shop_settings()
     logger.info("Database initialized")
 
     bot = create_bot()

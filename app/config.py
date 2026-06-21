@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     # Base folder for all uploads; subfolders /products and /logos are appended automatically.
     cloudinary_folder: str = Field("shopplatform/default", alias="CLOUDINARY_FOLDER")
 
+    # Initial shop identity (used only to seed ShopSettings on first run or to
+    # update default values; will not overwrite customised bot settings).
+    shop_title: str = Field("", alias="SHOP_TITLE")
+    shop_subtitle: str = Field("", alias="SHOP_SUBTITLE")
+
     @property
     def admin_ids(self) -> list[int]:
         """Parse ADMIN_IDS supporting all formats:
