@@ -138,7 +138,7 @@ class ProductSpec(Base):
         ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(String(128), nullable=False)
-    value: Mapped[str] = mapped_column(String(512), nullable=False)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
 
     product: Mapped["Product"] = relationship(back_populates="specs_structured")
 
