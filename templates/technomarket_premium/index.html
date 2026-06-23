@@ -148,15 +148,16 @@
     <button type="button" class="dp-show-all-btn" id="dpCatsToggle" onclick="dpToggleShowAll('cats')">Показати всі ↓</button>
   </div>
   <div class="dp-cats-grid" id="dpCatsGrid">
-    <a href="#" class="dp-cat-card dp-cat-active" data-filter-cat="" onclick="filterByCategory('', this); return false;">
+    <a href="#" class="dp-cat-card dp-cat-active" data-filter-cat="" data-group="" onclick="filterByCategory('', this); return false;">
       <div class="dp-cat-emoji">📦</div>
       <div class="dp-cat-title" data-ru="Все" data-uk="Всі">Всі</div>
     </a>
-    {% set ns4 = namespace(cats=[]) %}
+    {% set ns4 = namespace(cat_group_pairs=[]) %}
     {% for p in products %}
-      {% if p.category and p.category not in ns4.cats %}
-        {% set ns4.cats = ns4.cats + [p.category] %}
-        <a href="#" class="dp-cat-card" data-filter-cat="{{ p.category }}"
+      {% set pair = (p.group_name or '') ~ '||' ~ (p.category or '') %}
+      {% if p.category and pair not in ns4.cat_group_pairs %}
+        {% set ns4.cat_group_pairs = ns4.cat_group_pairs + [pair] %}
+        <a href="#" class="dp-cat-card" data-filter-cat="{{ p.category }}" data-group="{{ p.group_name or '' }}"
            onclick="filterByCategory('{{ p.category | replace("'", "\\'") }}', this); return false;">
           <div class="dp-cat-emoji">{{ cat_meta.get(p.category) or cat_emoji(p.category) }}</div>
           <div class="dp-cat-title">{{ p.category }}</div>
@@ -690,8 +691,22 @@ function updateSpecFilters(group) {
 
 function filterByGroup(group, el) {
   _activeGroup = group;
+  _activeCategory = '';
+  // Highlight active group card
   document.querySelectorAll('.site-category-card').forEach(function(c) {
     c.classList.toggle('active', c.getAttribute('data-filter-group') === group);
+  });
+  // Show/hide category cards: when group selected — only matching ones; else all
+  document.querySelectorAll('.dp-cat-card').forEach(function(c) {
+    var catGroup = c.getAttribute('data-group') || '';
+    var catFilter = c.getAttribute('data-filter-cat') || '';
+    if (!group || !catFilter) {
+      c.style.display = '';
+    } else {
+      c.style.display = catGroup === group ? '' : 'none';
+    }
+    // Reset active state — only "Всі" stays active
+    c.classList.toggle('dp-cat-active', catFilter === '');
   });
   updateSpecFilters(group);
   applyFilters();
