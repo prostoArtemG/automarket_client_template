@@ -31,7 +31,7 @@
   }
   </script>
 
-  <link rel="stylesheet" href="/static/css/technomarket_premium.css">
+  <link rel="stylesheet" href="/static/css/technomarket_premium.css?v=specs-fix-1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 </head>
@@ -228,7 +228,7 @@
         {% endif %}
         {% endfor %}
         {% if specs_items | length > 5 %}
-        <button class="specs-toggle-btn" id="specsToggleBtn">Показати всі характеристики ↓</button>
+        <button class="specs-toggle-btn">Показати всі характеристики ↓</button>
         {% endif %}
       {% elif product.specs %}
         {%- set ns = namespace(count=0) %}
@@ -243,7 +243,7 @@
         {% endif %}
         {% endfor %}
         {% if ns.count > 5 %}
-        <button class="specs-toggle-btn" id="specsToggleBtn">Показати всі характеристики ↓</button>
+        <button class="specs-toggle-btn">Показати всі характеристики ↓</button>
         {% endif %}
       {% endif %}
     </div>
@@ -389,14 +389,18 @@
 <script>
 // ── Specs toggle ─────────────────────────────────────────
 (function() {
-  var btn = document.getElementById('specsToggleBtn');
-  if (!btn) return;
-  var expanded = false;
-  btn.addEventListener('click', function() {
-    expanded = !expanded;
-    var rows = btn.closest('.prod-specs-rows');
-    if (rows) rows.classList.toggle('specs-expanded', expanded);
-    btn.textContent = expanded ? 'Сховати ↑' : 'Показати всі характеристики ↓';
+  document.querySelectorAll('.specs-toggle-btn').forEach(function(btn) {
+    var rowsWrap = btn.closest('.prod-specs-rows');
+    if (!rowsWrap) return;
+    var expanded = false;
+    btn.addEventListener('click', function() {
+      expanded = !expanded;
+      rowsWrap.classList.toggle('specs-expanded', expanded);
+      rowsWrap.querySelectorAll('.spec-extra').forEach(function(row) {
+        row.style.setProperty('display', expanded ? 'flex' : 'none', 'important');
+      });
+      btn.textContent = expanded ? 'Сховати ↑' : 'Показати всі характеристики ↓';
+    });
   });
 })();
 

@@ -1846,8 +1846,8 @@ body {
 .desc-list li::before { content:'•'; position:absolute; left:0; color:var(--accent); font-weight:700; }
 .desc-text { font-size:14px; color:#374151; line-height:1.65; margin:0; }
 .spec-hidden { display:none !important; }
-.spec-extra { display:none; }
-.prod-specs-rows.specs-expanded .spec-extra { display:flex; }
+.prod-specs-rows .spec-extra { display:none !important; }
+.prod-specs-rows.specs-expanded .spec-extra { display:flex !important; }
 .specs-toggle-btn { width:100%; margin-top:14px; padding:9px 16px; background:#fff; border:1.5px solid #d1d5db; border-radius:10px; font-size:13px; font-weight:600; color:#374151; cursor:pointer; text-align:center; box-sizing:border-box; transition:border-color .2s,background .2s,color .2s; display:block; }
 .specs-toggle-btn:hover { border-color:var(--accent); background:var(--accent-light); color:var(--accent); }
 .order-btn-product {
