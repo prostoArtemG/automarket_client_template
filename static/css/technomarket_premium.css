@@ -292,7 +292,7 @@ html:has(body[data-theme="dark_parallax"]) {
 [data-theme="dark_parallax"] .dp-cats-grid {
     max-width: 1140px;
     margin: 0 auto;
-    padding: 0 20px 4px;
+    padding: 8px 20px 8px;
     /* Flex-wrap: cards don't stretch/leave gaps when few exist */
     display: flex !important;
     flex-wrap: wrap;
@@ -725,10 +725,10 @@ html:has(body[data-theme="dark_parallax"]) {
     /* Prevent horizontal overflow from groups row */
     [data-theme="dark_parallax"] .dp-groups-wrap,
     [data-theme="dark_parallax"] .dp-cats-wrap {
-        overflow-x: hidden;
+        overflow: visible;
     }
     [data-theme="dark_parallax"] .site-categories {
-        padding: 0 14px 8px;
+        padding: 8px 14px 10px;
         gap: 8px;
         overscroll-behavior-x: contain;
     }
@@ -752,7 +752,7 @@ html:has(body[data-theme="dark_parallax"]) {
         display: grid !important;
         grid-template-columns: repeat(2, 1fr) !important;
         gap: 8px;
-        padding: 0 14px 6px;
+        padding: 8px 14px 8px;
         max-height: 240px;
         overflow: hidden;
         transition: max-height .4s ease;

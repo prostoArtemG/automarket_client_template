@@ -657,32 +657,30 @@ function _escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function _getAllSpecFilters() {
-  // Merge specs from all groups for "Всі товари" tab
-  var merged = {};
-  Object.keys(_categoryFilters).forEach(function(g) {
-    var gf = _categoryFilters[g];
-    Object.keys(gf).forEach(function(k) {
-      if (!merged[k]) merged[k] = {};
-      gf[k].forEach(function(v) { merged[k][v] = true; });
-    });
-  });
-  var result = {};
-  Object.keys(merged).forEach(function(k) {
-    result[k] = Object.keys(merged[k]).sort();
-  });
-  return result;
-}
-
-function updateSpecFilters(group) {
+function updateSpecFilters() {
+  if (!_cards.length) initCards();
   var section = document.getElementById('specsFiltersSection');
   if (!section) return;
-  var filters = group ? (_categoryFilters[group] || {}) : _getAllSpecFilters();
-  var specNames = Object.keys(filters);
+  // Collect spec values from cards matching current group/category only
+  var specSets = {};
+  _cards.forEach(function(card) {
+    if (_activeGroup && (card.getAttribute('data-group') || '') !== _activeGroup) return;
+    if (_activeCategory && (card.getAttribute('data-category') || '') !== _activeCategory) return;
+    var specsRaw = card.getAttribute('data-specs') || '{}';
+    var specsMap;
+    try { specsMap = JSON.parse(specsRaw); } catch(e) { specsMap = {}; }
+    Object.keys(specsMap).forEach(function(k) {
+      var v = specsMap[k];
+      if (v == null || v === '') return;
+      if (!specSets[k]) specSets[k] = new Set();
+      specSets[k].add(String(v));
+    });
+  });
+  var specNames = Object.keys(specSets).sort();
   var html = '';
   specNames.forEach(function(specName) {
-    var vals = filters[specName];
-    if (!vals || !vals.length) return;
+    var vals = Array.from(specSets[specName]).sort();
+    if (!vals.length) return;
     html += '<div class="filter-group" style="margin-bottom:10px;">';
     html += '<div style="font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">' + _escHtml(specName) + '</div>';
     vals.forEach(function(val) {
@@ -693,6 +691,36 @@ function updateSpecFilters(group) {
     html += '</div>';
   });
   section.innerHTML = html;
+}
+
+function _updateSpecAvailability(visibleCards) {
+  var section = document.getElementById('specsFiltersSection');
+  if (!section) return;
+  var availSpecs = {};
+  visibleCards.forEach(function(card) {
+    var specsRaw = card.getAttribute('data-specs') || '{}';
+    var specsMap;
+    try { specsMap = JSON.parse(specsRaw); } catch(e) { specsMap = {}; }
+    Object.keys(specsMap).forEach(function(k) {
+      var v = specsMap[k];
+      if (v == null || v === '') return;
+      if (!availSpecs[k]) availSpecs[k] = new Set();
+      availSpecs[k].add(String(v));
+    });
+  });
+  section.querySelectorAll('.filter-group').forEach(function(block) {
+    var anyVisible = false;
+    block.querySelectorAll('label').forEach(function(lbl) {
+      var cb = lbl.querySelector('input[type="checkbox"]');
+      if (!cb) return;
+      var sn = cb.getAttribute('data-spec-name');
+      var sv = cb.getAttribute('data-spec-value');
+      var avail = !!(availSpecs[sn] && availSpecs[sn].has(sv));
+      lbl.style.display = (avail || cb.checked) ? '' : 'none';
+      if (avail || cb.checked) anyVisible = true;
+    });
+    block.style.display = anyVisible ? '' : 'none';
+  });
 }
 
 function filterByGroup(group, el) {
@@ -714,7 +742,7 @@ function filterByGroup(group, el) {
     // Reset active state — only "Всі" stays active
     c.classList.toggle('dp-cat-active', catFilter === '');
   });
-  updateSpecFilters(group);
+  updateSpecFilters();
   applyFilters();
 }
 
@@ -723,6 +751,7 @@ function filterByCategory(cat, el) {
   document.querySelectorAll('.dp-cat-card').forEach(function(c) {
     c.classList.toggle('dp-cat-active', c.getAttribute('data-filter-cat') === cat);
   });
+  updateSpecFilters();
   applyFilters();
 }
 
@@ -799,6 +828,8 @@ function applyFilters() {
   // Reorder in DOM
   var grid = document.getElementById('productsGrid');
   filtered.forEach(function(card) { grid.appendChild(card); });
+  // Update which spec filter values are available
+  _updateSpecAvailability(filtered);
 }
 
 // ── Mobile filters panel ──────────────────────────────────
@@ -906,7 +937,28 @@ initFavoriteButtons();
 
 // Init
 initCards();
-updateSpecFilters('');
+updateSpecFilters();
+
+// ── Init from URL params (breadcrumb links) ───────────────
+(function() {
+  var params = new URLSearchParams(window.location.search);
+  var group = params.get('group');
+  var category = params.get('category');
+  if (group) {
+    var gCard = null;
+    document.querySelectorAll('.site-category-card[data-filter-group]').forEach(function(c) {
+      if (c.getAttribute('data-filter-group') === group) gCard = c;
+    });
+    if (gCard) filterByGroup(group, gCard);
+  }
+  if (category) {
+    var cCard = null;
+    document.querySelectorAll('.dp-cat-card[data-filter-cat]').forEach(function(c) {
+      if (c.getAttribute('data-filter-cat') === category) cCard = c;
+    });
+    if (cCard) filterByCategory(category, cCard);
+  }
+})();
 </script>
 </body>
 </html>

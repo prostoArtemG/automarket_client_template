@@ -96,7 +96,11 @@
     <a href="/" id="backToCatalog" data-ru="Каталог" data-uk="Каталог">Каталог</a>
     {% if product.group_name %}
     <span class="breadcrumb-sep">›</span>
-    <a href="/" id="backToGroup">{{ product.group_name }}</a>
+    <a href="/" id="breadcrumbGroup" data-group="{{ product.group_name }}">{{ product.group_name }}</a>
+    {% endif %}
+    {% if product.category %}
+    <span class="breadcrumb-sep">›</span>
+    <a href="/" id="breadcrumbCategory" data-category="{{ product.category }}">{{ product.category }}</a>
     {% endif %}
     <span class="breadcrumb-sep">›</span>
     <span class="breadcrumb-current">{{ (product.brand or '') ~ ' ' ~ product.name }}</span>
@@ -430,7 +434,16 @@ function orderUrl() {
 var catalogBase = catalogUrl();
 document.getElementById('backToCatalog').href = catalogBase;
 {% if product.group_name %}
-document.getElementById('backToGroup').href = catalogBase;
+(function() {
+  var gLink = document.getElementById('breadcrumbGroup');
+  if (gLink) gLink.href = catalogBase + '?group=' + encodeURIComponent(gLink.getAttribute('data-group') || '');
+})();
+{% endif %}
+{% if product.category %}
+(function() {
+  var cLink = document.getElementById('breadcrumbCategory');
+  if (cLink) cLink.href = catalogBase + '?category=' + encodeURIComponent(cLink.getAttribute('data-category') || '');
+})();
 {% endif %}
 
 // ── Language ──────────────────────────────────────────────
