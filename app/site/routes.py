@@ -171,6 +171,16 @@ async def shop_index(
             if not cs.is_filterable
         }
 
+        # Per-category set of ENABLED spec names (used to filter data-specs on cards).
+        # Category NOT in this dict → no CategorySpec rows yet → show all specs.
+        _cat_spec_filter: dict[str, dict[str, bool]] = {}
+        for _cs in _cat_spec_rows:
+            _cat_spec_filter.setdefault(_cs.category or "", {})[_cs.name or ""] = _cs.is_filterable
+        _enabled_specs_by_cat: dict[str, set[str]] = {
+            _cat: {_n for _n, _ok in _sp.items() if _ok}
+            for _cat, _sp in _cat_spec_filter.items()
+        }
+
         category_filters: dict[str, dict[str, list]] = {}
         try:
             spec_rows = list((
@@ -202,7 +212,12 @@ async def shop_index(
                 "price": float(p.price) if p.price is not None else 0.0,
                 "old_price": float(p.old_price) if p.old_price is not None else None,
                 "specs": p.specs,
-                "specs_map": _specs_by_product.get(p.id, {}),
+                "specs_map": {
+                    k: v
+                    for k, v in _specs_by_product.get(p.id, {}).items()
+                    if (p.category or "") not in _enabled_specs_by_cat
+                    or k in _enabled_specs_by_cat[p.category or ""]
+                },
                 "image_url": p.image_url,
                 "is_available": p.is_available,
                 "badge": p.badge,
