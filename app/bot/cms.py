@@ -2743,22 +2743,25 @@ async def cms_filt_cat_select(cb: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(F.data.startswith("cms:filt:toggle:"))
 async def cms_filt_toggle(cb: CallbackQuery, state: FSMContext) -> None:
-    await cb.answer()
     data = await state.get_data()
+    logger.info("FILTER TOGGLE callback=%s data=%s", cb.data, data)
     try:
         idx = int(cb.data.split(":")[-1])
     except ValueError:
+        await cb.answer()
         return
     specs: list[list] = data.get("filt_specs") or []
     category: str = data.get("filt_current_cat") or ""
 
     if not category or idx >= len(specs):
-        # FSM state was lost (bot restart) — cannot recover without knowing the category
-        await cb.message.answer(
-            "⚠️ Сесія фільтрів застаріла (бот перезапущено).\n"
-            "Натисніть «🧩 Фільтри» ще раз, щоб продовжити."
+        # FSM state was lost (bot restart) — show alert popup, do not proceed
+        await cb.answer(
+            "Оновіть меню фільтрів: натисніть «Фільтри» ще раз",
+            show_alert=True,
         )
         return
+
+    await cb.answer()
 
     name, current = specs[idx]
     new_val = not current
