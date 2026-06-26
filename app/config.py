@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     cloudinary_api_key: str = Field("", alias="CLOUDINARY_API_KEY")
     cloudinary_api_secret: str = Field("", alias="CLOUDINARY_API_SECRET")
     # Base folder for all uploads; subfolders /products and /logos are appended automatically.
-    cloudinary_folder: str = Field("shopplatform/default", alias="CLOUDINARY_FOLDER")
+    cloudinary_folder: str = Field("shopplatform/automarket/default", alias="CLOUDINARY_FOLDER")
 
     # Initial shop identity (used only to seed ShopSettings on first run or to
     # update default values; will not overwrite customised bot settings).

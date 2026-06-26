@@ -1,4 +1,4 @@
-"""FastAPI site routes for the TechnoMarket Premium storefront."""
+"""FastAPI site routes for the Auto Market storefront."""
 import asyncio
 import logging
 import os
@@ -18,6 +18,21 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
+
+
+def _detect_video_source(url: str | None) -> str | None:
+    if not url:
+        return None
+    lower = url.lower()
+    if "youtube.com" in lower or "youtu.be" in lower:
+        return "youtube"
+    if "instagram.com" in lower:
+        return "instagram"
+    if "tiktok.com" in lower:
+        return "tiktok"
+    if lower.endswith(".mp4") or ".mp4?" in lower:
+        return "mp4"
+    return "external"
 
 
 def _resolve_lang(lang: Optional[str], cookie: Optional[str]) -> str:
@@ -77,6 +92,10 @@ async def _get_shop_data() -> dict:
             "telegram_url": None,
             "instagram_url": None,
             "logo_url": None,
+            "telegram_channel_id": None,
+            "telegram_channel_username": None,
+            "autopost_enabled": False,
+            "autopost_with_video_enabled": False,
             "subtitle": None,
             "show_lang_switch": True,
             "promo_text": None,
@@ -95,6 +114,10 @@ async def _get_shop_data() -> dict:
         "telegram_url": shop.telegram_url,
         "instagram_url": shop.instagram_url,
         "logo_url": shop.logo_url,
+        "telegram_channel_id": shop.telegram_channel_id,
+        "telegram_channel_username": shop.telegram_channel_username,
+        "autopost_enabled": shop.autopost_enabled,
+        "autopost_with_video_enabled": shop.autopost_with_video_enabled,
         "subtitle": shop.subtitle,
         "show_lang_switch": shop.show_lang_switch,
         "promo_text": shop.promo_text,
@@ -210,6 +233,7 @@ async def shop_index(
                 "description": p.description,
                 "brand": p.brand,
                 "price": float(p.price) if p.price is not None else 0.0,
+                "price_usd": float(p.price_usd) if p.price_usd is not None else None,
                 "old_price": float(p.old_price) if p.old_price is not None else None,
                 "specs": p.specs,
                 "specs_map": {
@@ -221,6 +245,9 @@ async def shop_index(
                 "image_url": p.image_url,
                 "is_available": p.is_available,
                 "badge": p.badge,
+                "video_url": p.video_url,
+                "video_caption": p.video_caption,
+                "video_source_type": p.video_source_type or _detect_video_source(p.video_url),
             }
             for p in products_rows
         ]
@@ -230,7 +257,7 @@ async def shop_index(
     asyncio.create_task(_record_event("site_view"))
 
     response = templates.TemplateResponse(
-        "technomarket_premium/index.html",
+        "auto_market/index.html",
         {
             "request": request,
             "lang": chosen,
@@ -273,6 +300,7 @@ async def shop_product(
             "description": product_row.description,
             "brand": product_row.brand,
             "price": float(product_row.price) if product_row.price is not None else 0.0,
+            "price_usd": float(product_row.price_usd) if product_row.price_usd is not None else None,
             "old_price": float(product_row.old_price) if product_row.old_price is not None else None,
             "specs": product_row.specs,
             "image_url": product_row.image_url,
@@ -281,6 +309,9 @@ async def shop_product(
             "seo_title": product_row.seo_title,
             "seo_description": product_row.seo_description,
             "seo_keywords": product_row.seo_keywords,
+            "video_url": product_row.video_url,
+            "video_caption": product_row.video_caption,
+            "video_source_type": product_row.video_source_type or _detect_video_source(product_row.video_url),
         }
 
         specs_map: dict[str, str] = {}
@@ -318,7 +349,7 @@ async def shop_product(
     asyncio.create_task(_record_event("product_view", product_id))
 
     response = templates.TemplateResponse(
-        "technomarket_premium/product.html",
+        "auto_market/product.html",
         {
             "request": request,
             "lang": chosen,

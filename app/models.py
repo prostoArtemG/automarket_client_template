@@ -46,6 +46,14 @@ class ShopSettings(Base):
     telegram_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     instagram_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     logo_url: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
+    telegram_channel_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    telegram_channel_username: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    autopost_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false", default=False
+    )
+    autopost_with_video_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false", default=False
+    )
     # ── v2 fields ─────────────────────────────────────────────────────────────
     phone2: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     viber_url: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
@@ -96,6 +104,7 @@ class Product(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False, default=0)
+    price_usd: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)
     image_url: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
     brand: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     old_price: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)
@@ -107,6 +116,10 @@ class Product(Base):
     seo_title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     seo_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     seo_keywords: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    video_url: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
+    video_caption: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    video_source_type: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    telegram_channel_post_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

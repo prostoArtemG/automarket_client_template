@@ -46,10 +46,14 @@ async def catalog() -> dict:
                 "category": p.category,
                 "group_name": p.group_name,
                 "price": float(p.price),
+                "price_usd": float(p.price_usd) if p.price_usd is not None else None,
                 "old_price": float(p.old_price) if p.old_price else None,
                 "image_url": p.image_url,
                 "badge": p.badge,
                 "is_available": p.is_available,
+                "video_url": p.video_url,
+                "video_caption": p.video_caption,
+                "video_source_type": p.video_source_type,
             }
             for p in products
         ],
@@ -162,6 +166,11 @@ async def diag_product(product_id: int):
             "category": product.category,
             "description": product.description,
             "specs": product.specs,
+            "price_usd": float(product.price_usd) if product.price_usd is not None else None,
+            "video_url": product.video_url,
+            "video_caption": product.video_caption,
+            "video_source_type": product.video_source_type,
+            "telegram_channel_post_id": product.telegram_channel_post_id,
         },
         "product_spec_count": len(spec_rows),
         "product_specs": [

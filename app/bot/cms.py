@@ -10,6 +10,7 @@ Sections:
 from __future__ import annotations
 
 import asyncio
+import html
 import logging
 import os
 from datetime import datetime, timedelta, timezone
@@ -169,6 +170,8 @@ SETTINGS_PROMPTS: dict[str, str] = {
     "address":       "📍 <b>Адреса</b>\n\nВведіть адресу магазину:",
     "telegram_url":  "✈️ <b>Telegram</b>\n\nВведіть посилання на Telegram\n(наприклад: <code>https://t.me/myshop</code>):",
     "instagram_url": "📸 <b>Instagram</b>\n\nВведіть посилання на Instagram\n(наприклад: <code>https://instagram.com/myshop</code>):",
+    "telegram_channel_id": "📢 <b>Telegram канал</b>\n\nВведіть @username каналу або числовий chat_id\n(наприклад: <code>@my_auto_channel</code> або <code>-1001234567890</code>):",
+    "telegram_channel_username": "🔗 <b>Публічний username каналу</b>\n\nВведіть username без посилання\n(наприклад: <code>my_auto_channel</code>) або «-» щоб очистити:",
     "logo":          "🖼 <b>Логотип</b>\n\nНадішліть фото логотипу або URL посилання на зображення:",
     "promo_text":    "📢 <b>Бігучий рядок</b>\n\nВведіть текст бігучого рядка у верхній частині сайту:",
     "background_image": "🌄 <b>Задній фон сайту</b>\n\nНадішліть фото або URL зображення для фону сайту\n(рекомендований розмір: 1920×600px+):\n\n"
@@ -185,18 +188,29 @@ FIELD_ATTR: dict[str, str] = {
     "address":       "address",
     "telegram_url":  "telegram_url",
     "instagram_url": "instagram_url",
+    "telegram_channel_id": "telegram_channel_id",
+    "telegram_channel_username": "telegram_channel_username",
     "logo":          "logo_url",
     "promo_text":    "promo_text",
     "background_image": "background_image_url",
 }
 
 # ── Toggle fields (boolean ShopSettings columns) ──────────────────────────────
-TOGGLE_FIELDS: frozenset[str] = frozenset({"show_promo_bar", "show_lang_switch", "show_banner", "show_background_image"})
+TOGGLE_FIELDS: frozenset[str] = frozenset({
+    "show_promo_bar",
+    "show_lang_switch",
+    "show_banner",
+    "show_background_image",
+    "autopost_enabled",
+    "autopost_with_video_enabled",
+})
 TOGGLE_LABELS: dict[str, str] = {
     "show_promo_bar":         "Промо-бар",
     "show_lang_switch":       "Перемикач мови",
     "show_banner":            "Банер",
     "show_background_image":  "Задній фон",
+    "autopost_enabled":       "Автопост у канал",
+    "autopost_with_video_enabled": "Додавати відео-посилання",
 }
 
 
@@ -216,6 +230,8 @@ def _settings_text(shop: ShopSettings | None) -> str:
         f"📍 Адреса: {_v(shop.address if shop else None)}\n"
         f"✈️ Telegram: {_v(shop.telegram_url if shop else None)}\n"
         f"📸 Instagram: {_v(shop.instagram_url if shop else None)}\n"
+        f"📢 Telegram канал: {_v(shop.telegram_channel_id if shop else None)}\n"
+        f"🔗 Username каналу: {_v(shop.telegram_channel_username if shop else None)}\n"
         f"🖼 Логотип: {'✅ є' if (shop and shop.logo_url) else '<i>немає</i>'}\n"
         f"📢 Бігучий рядок: {_v(shop.promo_text if shop else None)}\n"
         f"🌄 Задній фон: {'✅ є' if (shop and shop.background_image_url) else '<i>немає</i>'}\n"
@@ -223,6 +239,8 @@ def _settings_text(shop: ShopSettings | None) -> str:
         f"🌐 Перемикач мови: {_on(shop.show_lang_switch if shop is not None else True)}\n"
         f"🖼 Банер: {_on(shop.show_banner if shop is not None else True)}\n"
         f"👁 Фон: {_on(shop.show_background_image if shop is not None else True)}\n"
+        f"📣 Автопост: {_on(shop.autopost_enabled if shop is not None else False)}\n"
+        f"🎬 Відео у пості: {_on(shop.autopost_with_video_enabled if shop is not None else False)}\n"
         f"🎨 Тема: {THEMES.get(theme, theme)}\n\n"
         f"Натисніть кнопку, щоб змінити:"
     )
@@ -235,6 +253,8 @@ def _settings_overview_kb(shop: ShopSettings | None = None) -> InlineKeyboardMar
     sl  = shop.show_lang_switch      if shop is not None else True
     sb  = shop.show_banner           if shop is not None else True
     sbg = shop.show_background_image if shop is not None else True
+    ap  = shop.autopost_enabled      if shop is not None else False
+    apv = shop.autopost_with_video_enabled if shop is not None else False
     has_bg = bool(shop and shop.background_image_url)
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -246,6 +266,8 @@ def _settings_overview_kb(shop: ShopSettings | None = None) -> InlineKeyboardMar
             [InlineKeyboardButton(text="📍 Адреса",                       callback_data="cms:set:address")],
             [InlineKeyboardButton(text="✈️ Telegram",                     callback_data="cms:set:telegram_url")],
             [InlineKeyboardButton(text="📸 Instagram",                    callback_data="cms:set:instagram_url")],
+            [InlineKeyboardButton(text="📢 Telegram канал",               callback_data="cms:set:telegram_channel_id")],
+            [InlineKeyboardButton(text="🔗 Username каналу",              callback_data="cms:set:telegram_channel_username")],
             [InlineKeyboardButton(text="🖼 Логотип",                      callback_data="cms:set:logo")],
             [InlineKeyboardButton(text="🎨 Тема сайту",                   callback_data="cms:set:theme")],
             [InlineKeyboardButton(text="📢 Бігучий рядок",                callback_data="cms:set:promo_text")],
@@ -260,6 +282,8 @@ def _settings_overview_kb(shop: ShopSettings | None = None) -> InlineKeyboardMar
                 text=f"{_bi(sbg)} {'Приховати фон' if sbg else 'Показувати фон'}",
                 callback_data="cms:toggle:show_background_image",
             )],
+            [InlineKeyboardButton(text=f"{_bi(ap)} Автопост у канал",    callback_data="cms:toggle:autopost_enabled")],
+            [InlineKeyboardButton(text=f"{_bi(apv)} Відео-посилання у пості", callback_data="cms:toggle:autopost_with_video_enabled")],
         ]
     )
 
@@ -421,11 +445,14 @@ _PROD_EDIT_PROMPTS: dict[str, str] = {
     "category":        "📂 Введіть нову категорію (або «-» щоб очистити):",
     "group_name":      "📁 Введіть нову групу (або «-» щоб очистити):",
     "price":           "💰 Введіть нову ціну (наприклад: 150):",
+    "price_usd":       "💵 Введіть ціну в доларах (наприклад: 4500) або «-» щоб очистити:",
     "old_price":       "🏷 Введіть стару ціну (або «-» щоб очистити):",
     "specs":           "📋 Введіть нові характеристики (або «-» щоб очистити):",
     "seo_title":       "📝 SEO Title — назва у браузері та пошукових системах.\nВведіть або «-» щоб очистити:",
     "seo_description": "📄 SEO Description — опис для пошукових систем.\nВведіть або «-» щоб очистити:",
     "seo_keywords":    "🔑 SEO Keywords — ключові слова через кому.\nВведіть або «-» щоб очистити:",
+    "video_url":       "🎬 Введіть посилання на відео-огляд (YouTube / Instagram / TikTok / mp4) або «-» щоб очистити:",
+    "video_caption":   "📝 Введіть короткий підпис до відео або «-» щоб очистити:",
 }
 _PROD_EDIT_VALID: frozenset[str] = frozenset(_PROD_EDIT_PROMPTS) | {"image"}
 
@@ -504,10 +531,16 @@ def _prod_card_text(p: "Product") -> str:
     lines.append(f"📂 Категорія:  {_v(p.category)}")
     lines.append(f"🏢 Бренд:      {_v(p.brand)}")
     lines.append(f"💰 Ціна:       <b>{_pfmt(p.price)} грн</b>")
+    if getattr(p, "price_usd", None):
+        lines.append(f"💵 Ціна USD:   <b>${_pfmt(p.price_usd)}</b>")
     if p.old_price:
         lines.append(f"🏷 Стара ціна: {_pfmt(p.old_price)} грн")
     if p.specs:
         lines.append(f"\n📋 <b>Характеристики:</b>\n{p.specs}")
+    if getattr(p, "video_url", None):
+        lines.append(f"\n🎬 Відео: {p.video_url}")
+    if getattr(p, "video_caption", None):
+        lines.append(f"📝 Підпис відео: {p.video_caption}")
     lines.append("")
     lines.append(f"👁 Статус: {'✅ В наявності' if p.is_available else '❌ Прихований'}")
     lines.append(f"🖼 Фото:   {'✅ є' if p.image_url else '<i>немає</i>'}")
@@ -538,6 +571,9 @@ def _prod_card_kb(p: "Product", page: int = 0, site_url: str = "") -> InlineKeyb
         ],
         [
             InlineKeyboardButton(text="💰 Ціна",           callback_data=f"cms:pe:{pid}:price:{page}"),
+            InlineKeyboardButton(text="💵 Ціна USD",       callback_data=f"cms:pe:{pid}:price_usd:{page}"),
+        ],
+        [
             InlineKeyboardButton(text="🏷 Стара ціна",     callback_data=f"cms:pe:{pid}:old_price:{page}"),
         ],
         [
@@ -553,6 +589,10 @@ def _prod_card_kb(p: "Product", page: int = 0, site_url: str = "") -> InlineKeyb
         ],
         [
             InlineKeyboardButton(text="🔍 SEO товару",     callback_data=f"cms:seo:{pid}:{page}"),
+        ],
+        [
+            InlineKeyboardButton(text="🎬 Відео-огляд",    callback_data=f"cms:pe:{pid}:video_url:{page}"),
+            InlineKeyboardButton(text="📝 Підпис відео",   callback_data=f"cms:pe:{pid}:video_caption:{page}"),
         ],
         [
             InlineKeyboardButton(text=toggle_text,         callback_data=f"cms:ptog:{pid}:{page}"),
@@ -774,6 +814,86 @@ def _specs_text_from_list(pairs: list[tuple[str, str]]) -> str | None:
     return "\n".join(f"{n}: {v}" for n, v in pairs)
 
 
+def _detect_video_source(url: str | None) -> str | None:
+    if not url:
+        return None
+    lower = url.lower()
+    if "youtube.com" in lower or "youtu.be" in lower:
+        return "youtube"
+    if "instagram.com" in lower:
+        return "instagram"
+    if "tiktok.com" in lower:
+        return "tiktok"
+    if lower.endswith(".mp4") or ".mp4?" in lower:
+        return "mp4"
+    return "external"
+
+
+def _channel_target(shop: ShopSettings | None) -> str | None:
+    if shop is None:
+        return None
+    return shop.telegram_channel_id or (
+        f"@{shop.telegram_channel_username.lstrip('@')}"
+        if shop.telegram_channel_username
+        else None
+    )
+
+
+def _channel_post_link(shop: ShopSettings | None, post_id: int | None) -> str | None:
+    if shop is None or post_id is None or not shop.telegram_channel_username:
+        return None
+    return f"https://t.me/{shop.telegram_channel_username.lstrip('@')}/{post_id}"
+
+
+async def _autopost_product_to_channel(bot: Bot, product_id: int) -> int | None:
+    async with AsyncSessionLocal() as session:
+        shop = await session.get(ShopSettings, 1)
+        product = await session.get(Product, product_id)
+        if shop is None or product is None or not shop.autopost_enabled:
+            return None
+        target = _channel_target(shop)
+        if not target:
+            return None
+
+        price_text = f"{_pfmt(product.price)} грн"
+        price_usd_text = f"\nЦіна USD: <b>${_pfmt(product.price_usd)}</b>" if product.price_usd else ""
+        old_price_text = f"\nСтара ціна: {_pfmt(product.old_price)} грн" if product.old_price else ""
+        specs_list = _parse_specs_text(product.specs)
+        specs_preview = "\n".join(
+            f"• {html.escape(name)}: {html.escape(value)}"
+            for name, value in specs_list[:6]
+        )
+        if specs_preview:
+            specs_preview = f"\n\nХарактеристики:\n{specs_preview}"
+        video_link = ""
+        if product.video_url and shop.autopost_with_video_enabled:
+            video_link = f"\n\nВідео огляд: {product.video_url}"
+
+        product_url = _site_url_for_product(product.id)
+        message = (
+            f"🚘 <b>{html.escape(product.brand + ' ' if product.brand else '')}{html.escape(product.name)}</b>\n"
+            f"Ціна: <b>{price_text}</b>{price_usd_text}{old_price_text}"
+            f"{specs_preview}"
+            f"{video_link}"
+            f"\n\nДетальніше: {product_url or 'сайт буде доступний після деплою'}"
+        )
+
+        sent = None
+        if product.image_url:
+            sent = await bot.send_photo(
+                target,
+                photo=product.image_url,
+                caption=message[:1024],
+                parse_mode="HTML",
+            )
+        else:
+            sent = await bot.send_message(target, message, parse_mode="HTML")
+
+        product.telegram_channel_post_id = sent.message_id if sent else None
+        await session.commit()
+        return product.telegram_channel_post_id
+
+
 def _specs_list_text(items: list) -> str:
     lines = "\n".join(f"• {it}" for it in items)
     return f"Поточні характеристики:\n{lines}\n\nДодайте ще або натисніть кнопку:"
@@ -802,6 +922,7 @@ class CmsAddProduct(StatesGroup):
     description    = State()
     specs          = State()
     price          = State()
+    price_usd      = State()
     old_price      = State()
     photos         = State()  # multi-photo collection (up to 5)
 
@@ -815,6 +936,8 @@ class CmsSettings(StatesGroup):
     address          = State()
     telegram_url     = State()
     instagram_url    = State()
+    telegram_channel_id = State()
+    telegram_channel_username = State()
     logo             = State()
     promo_text       = State()
     background_image = State()
@@ -972,10 +1095,12 @@ async def cms_prod_edit_field_input(message: Message, state: FSMContext) -> None
                 await message.answer("Назва не може бути порожньою або «-». Введіть ще раз:")
                 return
             product.name = val
-        elif field in ("price", "old_price"):
+        elif field in ("price", "price_usd", "old_price"):
             if clear:
                 if field == "old_price":
                     product.old_price = None
+                elif field == "price_usd":
+                    product.price_usd = None
                 else:
                     await message.answer("Ціна не може бути порожньою.")
                     return
@@ -990,6 +1115,8 @@ async def cms_prod_edit_field_input(message: Message, state: FSMContext) -> None
                     return
                 if field == "price":
                     product.price = v
+                elif field == "price_usd":
+                    product.price_usd = v
                 else:
                     product.old_price = v
         elif field == "specs":
@@ -1016,6 +1143,11 @@ async def cms_prod_edit_field_input(message: Message, state: FSMContext) -> None
                         )
                         if existing is None:
                             session.add(CategorySpec(category=product.category, name=spec_name))
+        elif field == "video_url":
+            product.video_url = None if clear else val
+            product.video_source_type = None if clear else _detect_video_source(val)
+        elif field == "video_caption":
+            product.video_caption = None if clear else val
         else:
             if field == "description" and not clear:
                 setattr(product, field, _clean_description(val))
@@ -1628,7 +1760,8 @@ async def cms_toggle_setting(cb: CallbackQuery) -> None:
         if shop is None:
             shop = ShopSettings(id=1)
             session.add(shop)
-        new_val = not getattr(shop, field, True)
+        default_current = field not in {"autopost_enabled", "autopost_with_video_enabled"}
+        new_val = not getattr(shop, field, default_current)
         setattr(shop, field, new_val)
         await session.commit()
         await session.refresh(shop)
@@ -1662,7 +1795,9 @@ async def cms_settings_clear_field(cb: CallbackQuery, state: FSMContext) -> None
 @router.message(StateFilter(
     CmsSettings.shop_title, CmsSettings.phone, CmsSettings.phone2,
     CmsSettings.viber_url, CmsSettings.subtitle, CmsSettings.address,
-    CmsSettings.telegram_url, CmsSettings.instagram_url, CmsSettings.promo_text,
+    CmsSettings.telegram_url, CmsSettings.instagram_url,
+    CmsSettings.telegram_channel_id, CmsSettings.telegram_channel_username,
+    CmsSettings.promo_text,
 ))
 async def cms_settings_text_input(message: Message, state: FSMContext) -> None:
     val = (message.text or "").strip()
@@ -1671,6 +1806,15 @@ async def cms_settings_text_input(message: Message, state: FSMContext) -> None:
         return
     current = await state.get_state()
     field = current.split(":")[-1] if current else ""
+    if field in {"telegram_channel_id", "telegram_channel_username"} and val == "-":
+        shop = await _save_settings_field(field, None)
+        await state.clear()
+        await message.answer(
+            _settings_text(shop),
+            parse_mode="HTML",
+            reply_markup=_settings_overview_kb(shop),
+        )
+        return
     if field in URL_SETTINGS_FIELDS:
         if not (val.startswith("https://") or val.startswith("http://")):
             await message.answer(
@@ -2052,8 +2196,31 @@ async def cms_add_price(message: Message, state: FSMContext) -> None:
         await message.answer("Некоректна ціна. Введіть число (наприклад: 150):")
         return
     await state.update_data(price=str(price))
+    await state.set_state(CmsAddProduct.price_usd)
+    await message.answer("Крок 8 — Ціна в доларах (необов'язково):", reply_markup=_skip_kb("price_usd"))
+
+
+@router.callback_query(F.data == "cms:skip:price_usd", StateFilter(CmsAddProduct.price_usd))
+async def cms_skip_price_usd(cb: CallbackQuery, state: FSMContext) -> None:
+    await state.update_data(price_usd=None)
     await state.set_state(CmsAddProduct.old_price)
-    await message.answer("Крок 8 — Стара ціна (для відображення знижки):", reply_markup=_skip_kb("old_price"))
+    await cb.message.answer("Крок 9 — Стара ціна (для відображення знижки):", reply_markup=_skip_kb("old_price"))
+    await cb.answer()
+
+
+@router.message(StateFilter(CmsAddProduct.price_usd))
+async def cms_add_price_usd(message: Message, state: FSMContext) -> None:
+    raw = (message.text or "").strip().replace(",", ".")
+    try:
+        price_usd = Decimal(raw)
+        if price_usd < 0:
+            raise ValueError("negative")
+    except (InvalidOperation, ValueError):
+        await message.answer("Некоректна ціна. Введіть число або натисніть «Пропустити»:")
+        return
+    await state.update_data(price_usd=str(price_usd))
+    await state.set_state(CmsAddProduct.old_price)
+    await message.answer("Крок 9 — Стара ціна (для відображення знижки):", reply_markup=_skip_kb("old_price"))
 
 
 @router.callback_query(F.data == "cms:skip:old_price", StateFilter(CmsAddProduct.old_price))
@@ -2244,6 +2411,7 @@ async def _do_save_product(message: Message, state: FSMContext) -> None:
     logger.info("SAVE PRODUCT specs_list=%r", specs_list)
 
     old_price_val = Decimal(data["old_price"]) if data.get("old_price") else None
+    price_usd_val = Decimal(data["price_usd"]) if data.get("price_usd") else None
     category = data.get("category")
     photos: list[str] = data.get("collected_photos") or []
 
@@ -2259,6 +2427,7 @@ async def _do_save_product(message: Message, state: FSMContext) -> None:
                 description=clean_desc,
                 specs=clean_specs,
                 price=Decimal(data["price"]),
+                price_usd=price_usd_val,
                 old_price=old_price_val,
                 image_url=main_url,
                 is_available=True,
@@ -2316,15 +2485,21 @@ async def _do_save_product(message: Message, state: FSMContext) -> None:
         except Exception as exc:
             logger.warning("Could not save ProductImage rows (table may not exist yet): %s", exc)
 
+    try:
+        await _autopost_product_to_channel(message.bot, product_id)
+    except Exception as exc:
+        logger.warning("Could not autopost product %s to Telegram channel: %s", product_id, exc)
+
     await state.clear()
     group_label = f" [{data['group_name']}]" if data.get("group_name") else ""
     cat_label = f" · {data['category']}" if data.get("category") else ""
     brand_label = f" [{data['brand']}]" if data.get("brand") else ""
     old_price_label = f" (знижка з {data['old_price']} грн)" if data.get("old_price") else ""
+    usd_label = f"\nЦіна USD: ${data['price_usd']}" if data.get("price_usd") else ""
     photo_label = f"\nФото: {len(photos)} шт." if photos else ""
     await message.answer(
         f"✅ Товар <b>{data['name']}</b>{brand_label} додано!{group_label}{cat_label}\n"
-        f"Ціна: {data['price']} грн{old_price_label}{photo_label}",
+        f"Ціна: {data['price']} грн{usd_label}{old_price_label}{photo_label}",
         parse_mode="HTML",
         reply_markup=main_menu(),
     )
@@ -3266,4 +3441,3 @@ async def cms_nav_cat_emoji_input(message: Message, state: FSMContext) -> None:
         await session.commit()
     await message.answer(f"✅ Emoji оновлено: {emoji_text} {name}")
     await _nav_show_cats(message, state)
-

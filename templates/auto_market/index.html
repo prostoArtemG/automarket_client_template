@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="{{ lang | default('uk') }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ client.shop_title }} — Авто каталог</title>
+  <meta name="description" content="{{ client.shop_title }} — каталог автомобілів з фільтрами по марці, моделі, року, пробігу та ціні.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0d1117; color: #e6edf3; line-height: 1.6;
+      min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden;
+    }
+    a { color: inherit; text-decoration: none; }
+    img { max-width: 100%; display: block; }
+    button { cursor: pointer; font-family: inherit; }
+    .container { max-width: 1280px; margin: 0 auto; padding: 0 20px; }
+
+    /* ── Variables ── */
+    :root {
+      --accent: #e8a020;
+      --accent-hover: #d08010;
+      --accent-10: rgba(232,160,32,.12);
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-2: #1c2130;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --border: #30363d;
+      --hero-bg: #0a0e14;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 16px rgba(0,0,0,.4);
+    }
+    .header-inner {
+      display: flex; align-items: center; gap: 16px; padding: 14px 0;
+    }
+    .logo {
+      display: flex; align-items: center; gap: 10px; flex-shrink: 0; text-decoration: none; color: inherit;
+    }
+    .logo-img { height: 38px; width: 38px; object-fit: contain; border-radius: 8px; }
+    .logo-icon {
+      width: 42px; height: 42px; border-radius: 10px; background: var(--accent);
+      color: #000; display: flex; align-items: center; justify-content: center;
+      font-size: 22px; flex-shrink: 0;
+    }
+    .logo-name { font-size: 18px; font-weight: 800; color: var(--accent); letter-spacing: -.4px; }
+    .logo-sub  { font-size: 10px; color: var(--muted); margin-top: 1px; }
+    .header-spacer { flex: 1; }
+    .header-search { flex: 1; max-width: 480px; position: relative; }
+    .search-wrap {
+      display: flex; border: 1.5px solid var(--border); border-radius: 10px;
+      overflow: visible; background: var(--bg); transition: border-color .2s; position: relative;
+    }
+    .search-wrap:focus-within { border-color: var(--accent); }
+    .search-wrap input {
+      flex: 1; border: none; background: transparent; padding: 10px 14px;
+      font-size: 14px; outline: none; color: var(--text); min-width: 0;
+    }
+    .search-wrap input::placeholder { color: var(--muted); }
+    .search-wrap button {
+      background: var(--accent); border: none; padding: 10px 18px; color: #000;
+      font-size: 14px; border-radius: 0 8px 8px 0; flex-shrink: 0; transition: background .2s; font-weight: 700;
+    }
+    .search-wrap button:hover { background: var(--accent-hover); }
+    .search-dropdown {
+      display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      box-shadow: 0 8px 28px rgba(0,0,0,.4); z-index: 500; max-height: 340px; overflow-y: auto;
+    }
+    .search-item {
+      display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+      cursor: pointer; border-bottom: 1px solid var(--border); transition: background .15s;
+    }
+    .search-item:last-child { border-bottom: none; }
+    .search-item:hover { background: var(--surface-2); }
+    .search-item img { width: 48px; height: 36px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); flex-shrink: 0; }
+    .search-item-ph { width: 48px; height: 36px; background: var(--bg); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+    .search-item-info { flex: 1; min-width: 0; }
+    .search-item-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .search-item-meta { font-size: 11px; color: var(--muted); }
+    .search-item-price { font-size: 13px; font-weight: 700; color: var(--accent); flex-shrink: 0; }
+    .header-contacts { display: flex; align-items: center; gap: 16px; flex-shrink: 0; margin-left: auto; }
+    .phone-link { font-size: 13px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 5px; white-space: nowrap; transition: color .2s; }
+    .phone-link:hover { color: var(--accent); }
+
+    /* ── Hero ── */
+    .hero {
+      background: linear-gradient(135deg, #0a0e14 0%, #111820 50%, #0d1520 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 60px 0 48px; position: relative; overflow: hidden;
+    }
+    .hero::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 70% 50%, rgba(232,160,32,.07) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-inner { position: relative; z-index: 1; }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--accent-10); border: 1px solid rgba(232,160,32,.3);
+      color: var(--accent); font-size: 12px; font-weight: 700; letter-spacing: .5px;
+      text-transform: uppercase; padding: 5px 14px; border-radius: 20px; margin-bottom: 18px;
+    }
+    .hero-title {
+      font-size: clamp(32px, 5vw, 58px); font-weight: 900; line-height: 1.1;
+      letter-spacing: -.02em; margin-bottom: 14px; color: #fff;
+    }
+    .hero-title span { color: var(--accent); }
+    .hero-desc { font-size: 16px; color: var(--muted); max-width: 560px; margin-bottom: 32px; line-height: 1.7; }
+    .hero-stats { display: flex; gap: 32px; flex-wrap: wrap; }
+    .hero-stat { text-align: center; }
+    .hero-stat strong { display: block; font-size: 28px; font-weight: 900; color: var(--accent); line-height: 1; }
+    .hero-stat span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+
+    /* ── Quick search bar ── */
+    .quick-filter-bar {
+      background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 0;
+    }
+    .quick-filter-inner { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .quick-select {
+      border: 1.5px solid var(--border); border-radius: 8px; padding: 8px 12px;
+      font-size: 13px; background: var(--bg); color: var(--text); cursor: pointer;
+      outline: none; transition: border-color .2s; min-width: 140px;
+    }
+    .quick-select:focus { border-color: var(--accent); }
+    .quick-filter-btn {
+      background: var(--accent); color: #000; border: none; border-radius: 8px;
+      padding: 9px 22px; font-size: 13px; font-weight: 700; transition: background .2s;
+    }
+    .quick-filter-btn:hover { background: var(--accent-hover); }
+    .quick-reset {
+      background: none; border: 1.5px solid var(--border); color: var(--muted);
+      border-radius: 8px; padding: 8px 16px; font-size: 13px; transition: all .2s;
+    }
+    .quick-reset:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Main layout ── */
+    .main-wrap { flex: 1; padding: 28px 0 60px; }
+    .main-grid { display: grid; grid-template-columns: 280px 1fr; gap: 24px; align-items: start; }
+
+    /* Filters toggle (mobile) */
+    .filters-toggle {
+      display: none; width: 100%; padding: 12px; background: var(--surface);
+      color: var(--text); border: 1.5px solid var(--border); border-radius: 10px;
+      font-size: 15px; font-weight: 600; margin-bottom: 16px; transition: border-color .2s;
+    }
+    .filters-toggle:hover { border-color: var(--accent); }
+    @media (max-width: 960px) {
+      .filters-toggle { display: flex; align-items: center; justify-content: center; gap: 8px; }
+      #filtersPanel { display: none; }
+      #filtersPanel.open { display: block; }
+      .main-grid { grid-template-columns: 1fr; }
+    }
+
+    /* Sidebar */
+    .filters {
+      background: var(--surface); border-radius: 14px; border: 1px solid var(--border);
+      padding: 20px; position: sticky; top: 80px;
+    }
+    .filters-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 18px; font-weight: 700; font-size: 15px; padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .filters-reset { font-size: 12px; color: var(--accent); font-weight: 500; cursor: pointer; }
+    .filters-reset:hover { text-decoration: underline; }
+    .filter-group { margin-bottom: 20px; }
+    .filter-group:last-child { margin-bottom: 0; }
+    .filter-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .8px; color: var(--muted); margin-bottom: 10px;
+    }
+    .filter-select {
+      width: 100%; border: 1.5px solid var(--border); border-radius: 8px; padding: 9px 12px;
+      font-size: 13px; background: var(--bg); color: var(--text); cursor: pointer;
+      outline: none; transition: border-color .2s;
+    }
+    .filter-select:focus { border-color: var(--accent); }
+    .price-inputs { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .price-inputs input {
+      flex: 1; border: 1.5px solid var(--border); border-radius: 8px; padding: 8px 10px;
+      font-size: 13px; background: var(--bg); color: var(--text); outline: none; width: 0;
+      transition: border-color .2s;
+    }
+    .price-inputs input:focus { border-color: var(--accent); }
+    .price-inputs span { color: var(--muted); flex-shrink: 0; }
+    .mileage-inputs { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .mileage-inputs input {
+      flex: 1; border: 1.5px solid var(--border); border-radius: 8px; padding: 8px 10px;
+      font-size: 13px; background: var(--bg); color: var(--text); outline: none; width: 0;
+      transition: border-color .2s;
+    }
+    .mileage-inputs input:focus { border-color: var(--accent); }
+    .mileage-inputs span { color: var(--muted); flex-shrink: 0; }
+    .btn-apply {
+      width: 100%; background: var(--accent); color: #000; border: none;
+      border-radius: 8px; padding: 9px; font-size: 13px; font-weight: 700; transition: background .2s;
+    }
+    .btn-apply:hover { background: var(--accent-hover); }
+    .filter-avail {
+      display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+      background: var(--bg); border-radius: 8px; cursor: pointer;
+      font-size: 13px; font-weight: 500; margin-bottom: 8px; border: 1.5px solid var(--border);
+      transition: border-color .2s;
+    }
+    .filter-avail:hover { border-color: var(--accent); }
+    .filter-avail input { accent-color: var(--accent); width: 15px; height: 15px; }
+
+    /* Catalog */
+    .catalog-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 20px; flex-wrap: wrap; gap: 10px;
+    }
+    .catalog-title { font-size: 20px; font-weight: 800; }
+    .catalog-meta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .catalog-count { font-size: 14px; color: var(--muted); }
+    .catalog-sort select {
+      border: 1.5px solid var(--border); border-radius: 8px; padding: 7px 12px;
+      font-size: 13px; background: var(--surface); color: var(--text); cursor: pointer; outline: none;
+    }
+    .catalog-sort select:focus { border-color: var(--accent); }
+
+    /* View toggle */
+    .view-toggle { display: flex; border: 1.5px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .view-btn {
+      background: none; border: none; padding: 6px 10px; color: var(--muted); font-size: 16px;
+      transition: background .2s, color .2s;
+    }
+    .view-btn.active { background: var(--accent-10); color: var(--accent); }
+
+    /* Car grid */
+    .cars-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
+    .cars-list { display: flex; flex-direction: column; gap: 14px; }
+
+    /* Car card (grid) */
+    .car-card {
+      background: var(--surface); border-radius: 14px; border: 1px solid var(--border);
+      overflow: hidden; cursor: pointer; transition: box-shadow .2s, transform .15s, border-color .2s;
+      display: flex; flex-direction: column;
+    }
+    .car-card:hover { box-shadow: 0 8px 40px rgba(0,0,0,.5); transform: translateY(-3px); border-color: var(--accent); }
+    .car-card.unavailable { opacity: .65; }
+    .car-img-wrap { position: relative; height: 195px; background: var(--bg); overflow: hidden; }
+    .car-img-wrap img { width: 100%; height: 100%; object-fit: cover; transition: transform .4s; }
+    .car-card:hover .car-img-wrap img { transform: scale(1.04); }
+    .car-img-placeholder { height: 100%; display: flex; align-items: center; justify-content: center; font-size: 64px; color: var(--muted); }
+    .car-badge-wrap { position: absolute; top: 10px; left: 10px; display: flex; flex-direction: column; gap: 4px; }
+    .car-badge {
+      font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 5px; text-transform: uppercase; letter-spacing: .3px;
+    }
+    .badge-new    { background: var(--accent); color: #000; }
+    .badge-sale   { background: #e63222; color: #fff; }
+    .badge-top    { background: #2563eb; color: #fff; }
+    .badge-unavail{ background: #555; color: #fff; }
+    .car-body { padding: 16px; flex: 1; display: flex; flex-direction: column; gap: 8px; }
+    .car-brand { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--accent); }
+    .car-title {
+      font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.3;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .car-specs-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .car-spec-tag {
+      display: flex; align-items: center; gap: 4px;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+      padding: 3px 8px; font-size: 11px; color: var(--muted); font-weight: 500;
+    }
+    .car-spec-tag .tag-icon { font-size: 12px; }
+    .car-footer {
+      display: flex; align-items: flex-end; justify-content: space-between;
+      gap: 8px; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border);
+    }
+    .car-price-wrap { display: flex; flex-direction: column; line-height: 1.2; }
+    .car-old-price { font-size: 11px; color: var(--muted); text-decoration: line-through; }
+    .car-price { font-size: 20px; font-weight: 900; color: var(--accent); }
+    .car-price-usd { font-size: 12px; color: var(--muted); font-weight: 700; margin-top: 3px; }
+    .btn-view {
+      background: var(--accent); color: #000; border: none; border-radius: 9px;
+      padding: 9px 16px; font-size: 13px; font-weight: 700; transition: background .2s, transform .15s;
+      white-space: nowrap;
+    }
+    .btn-view:hover { background: var(--accent-hover); transform: scale(1.04); }
+
+    /* Car card (list view) */
+    .car-card-list {
+      background: var(--surface); border-radius: 14px; border: 1px solid var(--border);
+      overflow: hidden; cursor: pointer; display: flex; align-items: stretch;
+      transition: box-shadow .2s, border-color .2s;
+    }
+    .car-card-list:hover { box-shadow: 0 6px 30px rgba(0,0,0,.4); border-color: var(--accent); }
+    .car-card-list .car-img-wrap { width: 220px; min-width: 220px; height: auto; min-height: 140px; flex-shrink: 0; }
+    .car-card-list .car-body { flex-direction: row; flex-wrap: wrap; align-items: center; padding: 18px 20px; gap: 12px; }
+    .car-card-list .car-title-area { flex: 1; min-width: 0; }
+    .car-card-list .car-footer { border-top: none; padding-top: 0; margin-top: 0; flex-shrink: 0; flex-direction: column; align-items: flex-end; }
+
+    /* Empty */
+    .empty-state { display: none; text-align: center; padding: 60px 20px; color: var(--muted); }
+    .empty-state.show { display: block; }
+    .empty-icon { font-size: 56px; margin-bottom: 14px; }
+    .empty-state p { font-size: 16px; margin-bottom: 20px; line-height: 1.6; }
+    .btn-primary {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--accent); color: #000; border: none; border-radius: 10px;
+      padding: 12px 28px; font-size: 14px; font-weight: 700; cursor: pointer; transition: background .2s;
+    }
+    .btn-primary:hover { background: var(--accent-hover); }
+
+    /* ── Footer ── */
+    .footer { background: #080c10; border-top: 1px solid var(--border); margin-top: auto; }
+    .footer-inner { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 40px; padding: 48px 20px 40px; }
+    .footer-logo-text { font-size: 20px; font-weight: 900; color: var(--accent); margin-bottom: 8px; }
+    .footer-sub { font-size: 13px; color: var(--muted); line-height: 1.6; margin-bottom: 16px; }
+    .footer-contacts a, .footer-contacts p { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; margin-bottom: 7px; transition: color .15s; }
+    .footer-contacts a:hover { color: var(--accent); }
+    .footer-social { display: flex; gap: 10px; margin-top: 12px; }
+    .footer-social a {
+      width: 36px; height: 36px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; transition: all .15s;
+    }
+    .footer-social a:hover { border-color: var(--accent); color: var(--accent); }
+    .footer-section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 16px; }
+    .footer-links { display: flex; flex-direction: column; gap: 10px; }
+    .footer-links a { font-size: 14px; color: var(--muted); transition: color .15s; }
+    .footer-links a:hover { color: var(--accent); }
+    .footer-links p { font-size: 13px; color: var(--muted); line-height: 1.5; }
+    .footer-bottom {
+      border-top: 1px solid var(--border); padding: 16px 20px;
+      font-size: 13px; color: var(--muted); text-align: center;
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+    }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+      background: #1c2130; color: var(--text); border: 1px solid var(--border);
+      padding: 14px 24px; border-radius: 12px; font-size: 14px; font-weight: 600;
+      opacity: 0; transition: all .3s; pointer-events: none; z-index: 9999;
+      min-width: 260px; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,.5);
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ── Responsive ── */
+    @media (max-width: 960px) {
+      .main-grid { grid-template-columns: 1fr; }
+      .footer-inner { grid-template-columns: 1fr 1fr; }
+      .hero { padding: 40px 0 32px; }
+    }
+    @media (max-width: 640px) {
+      .hero-stats { gap: 20px; }
+      .cars-grid { grid-template-columns: 1fr; }
+      .car-card-list { flex-direction: column; }
+      .car-card-list .car-img-wrap { width: 100%; min-height: 200px; }
+      .footer-inner { grid-template-columns: 1fr; gap: 24px; }
+      .quick-filter-inner { gap: 8px; }
+      .quick-select { min-width: 120px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header" id="siteHeader">
+  <div class="container header-inner">
+    <a href="#" onclick="resetFilters();window.scrollTo({top:0,behavior:'smooth'});return false;" class="logo">
+      {% if client.logo_url %}
+        <img src="{{ client.logo_url }}" alt="{{ client.shop_title }}" class="logo-img">
+      {% else %}
+        <div class="logo-icon">&#x1F697;</div>
+      {% endif %}
+      <div>
+        <div class="logo-name">{{ client.shop_title }}</div>
+        {% if client.address %}<div class="logo-sub">{{ client.address | truncate(30, true, '…') }}</div>{% endif %}
+      </div>
+    </a>
+
+    <div class="header-search">
+      <div class="search-wrap">
+        <input type="text" id="searchInput" placeholder="Пошук авто за маркою або моделлю..." autocomplete="off"
+               oninput="handleSearch(this.value)" onkeydown="handleSearchKey(event)">
+        <button type="button" onclick="applySearch()">&#x1F50D;</button>
+        <div class="search-dropdown" id="searchDropdown"></div>
+      </div>
+    </div>
+
+    <div class="header-contacts">
+      {% if client.phone %}
+      <a class="phone-link" href="tel:{{ client.phone }}">&#x1F4DE; {{ client.phone }}</a>
+      {% endif %}
+    </div>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="container hero-inner">
+    <div class="hero-badge">&#x1F697; Авто каталог</div>
+    <h1 class="hero-title">{{ client.shop_title }}<br><span>Ваш автомобіль — тут</span></h1>
+    <p class="hero-desc">Широкий вибір автомобілів із зручними фільтрами по марці, моделі, року, пробігу та ціні. Залиште заявку — ми зв'яжемось з вами.</p>
+    <div class="hero-stats" id="heroStats"></div>
+  </div>
+</section>
+
+<!-- QUICK FILTER BAR -->
+<div class="quick-filter-bar">
+  <div class="container quick-filter-inner">
+    <select class="quick-select" id="qBrand" onchange="onQuickBrandChange()">
+      <option value="">Всі марки</option>
+    </select>
+    <select class="quick-select" id="qModel" onchange="applyQuickFilter()">
+      <option value="">Всі моделі</option>
+    </select>
+    <select class="quick-select" id="qYear" onchange="applyQuickFilter()">
+      <option value="">Рік</option>
+    </select>
+    <select class="quick-select" id="qFuel" onchange="applyQuickFilter()">
+      <option value="">Паливо</option>
+    </select>
+    <button class="quick-filter-btn" onclick="applyQuickFilter()">&#x1F50D; Знайти</button>
+    <button class="quick-reset" onclick="resetFilters()">&#x2715; Скинути</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main-wrap">
+  <div class="container">
+    <button class="filters-toggle" onclick="toggleFilters()">&#x2699;&#xFE0F; Фільтри</button>
+    <div class="main-grid">
+
+      <!-- SIDEBAR FILTERS -->
+      <aside class="filters" id="filtersPanel">
+        <div class="filters-header">
+          <span>&#x1F50D; Фільтри</span>
+          <span class="filters-reset" onclick="resetFilters()">Скинути все</span>
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-avail">
+            <input type="checkbox" id="availCheck" onchange="renderCars()">
+            &#x1F7E2; Тільки в наявності
+          </label>
+        </div>
+
+        <div class="filter-group">
+          <div class="filter-title">Марка</div>
+          <select class="filter-select" id="brandSelect" onchange="onSidebarBrandChange()">
+            <option value="">Всі марки</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <div class="filter-title">Модель</div>
+          <select class="filter-select" id="modelSelect" onchange="renderCars()">
+            <option value="">Всі моделі</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <div class="filter-title">Тип кузова</div>
+          <select class="filter-select" id="bodySelect" onchange="renderCars()">
+            <option value="">Всі типи</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <div class="filter-title">Рік</div>
+          <div class="price-inputs">
+            <input type="number" id="yearMin" placeholder="Від" min="1990" max="2030">
+            <span>—</span>
+            <input type="number" id="yearMax" placeholder="До" min="1990" max="2030">
+          </div>
+          <button class="btn-apply" onclick="renderCars()">Застосувати</button>
+        </div>
+
+        <div class="filter-group">
+          <div class="filter-title">Ціна, грн</div>
+          <div class="price-inputs">
+            <input type="number" id="priceMin" placeholder="Від" min="0">
+            <span>—</span>
+            <input type="number" id="priceMax" placeholder="До" min="0">
+          </div>
+          <button class="btn-apply" onclick="renderCars()">Застосувати</button>
+        </div>
+
+        <div class="filter-group">
+          <div class="filter-title">Пробіг, тис. км</div>
+          <div class="mileage-inputs">
+            <input type="number" id="mileageMin" placeholder="Від" min="0">
+            <span>—</span>
+            <input type="number" id="mileageMax" placeholder="До" min="0">
+          </div>
+          <button class="btn-apply" onclick="renderCars()">Застосувати</button>
+        </div>
+
+        <div class="filter-group">
+          <div class="filter-title">Паливо</div>
+          <select class="filter-select" id="fuelSelect" onchange="renderCars()">
+            <option value="">Будь-яке</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <div class="filter-title">Коробка передач</div>
+          <select class="filter-select" id="transmissionSelect" onchange="renderCars()">
+            <option value="">Будь-яка</option>
+          </select>
+        </div>
+      </aside>
+
+      <!-- CATALOG -->
+      <div>
+        <div class="catalog-header">
+          <div class="catalog-title" id="catalogTitle">Каталог автомобілів</div>
+          <div class="catalog-meta">
+            <div class="catalog-count" id="catalogCount">0 авто</div>
+            <div class="catalog-sort">
+              <select id="sortSelect" onchange="renderCars()">
+                <option value="">За замовчуванням</option>
+                <option value="price_asc">Дешевше</option>
+                <option value="price_desc">Дорожче</option>
+                <option value="year_desc">Новіші</option>
+                <option value="year_asc">Старіші</option>
+                <option value="mileage_asc">Менший пробіг</option>
+              </select>
+            </div>
+            <div class="view-toggle">
+              <button class="view-btn active" id="viewGrid" onclick="setView('grid')" title="Сітка">&#x22A0;</button>
+              <button class="view-btn" id="viewList" onclick="setView('list')" title="Список">&#x2630;</button>
+            </div>
+          </div>
+        </div>
+        <div id="carsContainer" class="cars-grid"></div>
+        <div class="empty-state" id="emptyState">
+          <div class="empty-icon">&#x1F697;</div>
+          <p>Автомобілів за вашими критеріями не знайдено.<br>Спробуйте змінити фільтри.</p>
+          <button class="btn-primary" onclick="resetFilters()">Показати всі авто</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="container footer-inner">
+    <div>
+      {% if client.logo_url %}<img src="{{ client.logo_url }}" alt="{{ client.shop_title }}" style="height:40px;border-radius:8px;margin-bottom:10px;">{% endif %}
+      <div class="footer-logo-text">{{ client.shop_title }}</div>
+      <p class="footer-sub">Широкий вибір автомобілів з офіційною гарантією та прозорою історією. Допоможемо знайти ваше ідеальне авто.</p>
+      <div class="footer-contacts">
+        {% if client.phone %}<a href="tel:{{ client.phone }}">&#x1F4DE; {{ client.phone }}</a>{% endif %}
+        {% if client.address %}<p>&#x1F4CD; {{ client.address }}</p>{% endif %}
+      </div>
+      <div class="footer-social">
+        {% if client.telegram_url %}<a href="{{ client.telegram_url }}" target="_blank" rel="noopener" title="Telegram">&#x2708;&#xFE0F;</a>{% endif %}
+        {% if client.instagram_url %}<a href="{{ client.instagram_url }}" target="_blank" rel="noopener" title="Instagram">&#x1F4F7;</a>{% endif %}
+      </div>
+    </div>
+    <div>
+      <div class="footer-section-title">Каталог</div>
+      <div class="footer-links" id="footerBrandLinks"></div>
+    </div>
+    <div>
+      <div class="footer-section-title">Покупцям</div>
+      <div class="footer-links">
+        <p>Перегляд та тест-драйв за записом</p>
+        <p>Допомога з документами</p>
+        <p>Trade-in — здайте своє авто</p>
+        {% if client.telegram_url %}<a href="{{ client.telegram_url }}" target="_blank" rel="noopener noreferrer">&#x2708;&#xFE0F; Telegram-підтримка</a>{% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>&#x00A9; {{ client.shop_title }}</span>
+    <span>Всі права захищені</span>
+  </div>
+</footer>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- DATA -->
+<script>
+const SLUG            = {{ client.slug | tojson }};
+const ALL_CARS        = {{ products | tojson }};
+const PLATFORM_DOMAIN = {{ platform_domain | tojson }};
+
+/* True when opened via {slug}.shopplatform.app (subdomain mode) */
+const isSubdomainMode = !!PLATFORM_DOMAIN
+  && location.hostname !== PLATFORM_DOMAIN
+  && location.hostname.endsWith("." + PLATFORM_DOMAIN);
+
+function productUrl(id) {
+  return isSubdomainMode
+    ? "/product/" + id
+    : "/site/" + SLUG + "/product/" + id;
+}
+function orderUrl() {
+  return isSubdomainMode ? "/order" : "/site/" + SLUG + "/order";
+}
+
+let currentView = 'grid';
+let searchQuery  = '';
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+function spec(car, key) {
+  const sm = car.specs_map || {};
+  const keys = Object.keys(sm);
+  const lk = key.toLowerCase();
+  for (const k of keys) {
+    if (k.toLowerCase().includes(lk)) return sm[k];
+  }
+  return null;
+}
+function fmtPrice(p) {
+  if (!p && p !== 0) return '';
+  return Number(p).toLocaleString('uk-UA') + ' грн';
+}
+function fmtMileage(v) {
+  if (!v) return '';
+  const n = parseFloat(v);
+  if (isNaN(n)) return v;
+  return n.toLocaleString('uk-UA') + ' км';
+}
+function parseMileage(v) {
+  if (!v) return null;
+  const m = String(v).replace(/\s/g,'').replace(',','.');
+  const n = parseFloat(m);
+  return isNaN(n) ? null : n;
+}
+function parseYear(v) {
+  if (!v) return null;
+  const n = parseInt(v);
+  return isNaN(n) ? null : n;
+}
+
+// ── build filter options ──────────────────────────────────────────────────────
+function buildOptions() {
+  const brands = [...new Set(ALL_CARS.map(c => c.brand).filter(Boolean))].sort();
+  const bodies  = [...new Set(ALL_CARS.map(c => c.category).filter(Boolean))].sort();
+  const fuels   = [...new Set(ALL_CARS.map(c => spec(c,'Паливо')||spec(c,'паливо')||spec(c,'Fuel')).filter(Boolean))].sort();
+  const trans   = [...new Set(ALL_CARS.map(c => spec(c,'Коробка')||spec(c,'коробка')||spec(c,'КПП')).filter(Boolean))].sort();
+  const years   = ALL_CARS.map(c => parseYear(spec(c,'Рік')||spec(c,'рік'))).filter(Boolean);
+
+  ['brandSelect','qBrand'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const cur = el.value;
+    el.innerHTML = '<option value="">Всі марки</option>' + brands.map(b => `<option value="${b}">${b}</option>`).join('');
+    if (brands.includes(cur)) el.value = cur;
+  });
+  ['bodySelect'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = '<option value="">Всі типи</option>' + bodies.map(b => `<option value="${b}">${b}</option>`).join('');
+  });
+  ['fuelSelect','qFuel'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const cur = el.value;
+    el.innerHTML = '<option value="">Будь-яке</option>' + fuels.map(f => `<option value="${f}">${f}</option>`).join('');
+    if (fuels.includes(cur)) el.value = cur;
+  });
+  document.getElementById('transmissionSelect').innerHTML =
+    '<option value="">Будь-яка</option>' + trans.map(t => `<option value="${t}">${t}</option>`).join('');
+
+  if (years.length) {
+    const minY = Math.min(...years), maxY = Math.max(...years);
+    const yOpts = '<option value="">Рік</option>' + [...new Set(years)].sort((a,b)=>b-a).map(y => `<option value="${y}">${y}</option>`).join('');
+    document.getElementById('qYear').innerHTML = yOpts;
+  }
+
+  // Footer brand links
+  const fl = document.getElementById('footerBrandLinks');
+  if (fl) fl.innerHTML = brands.slice(0,8).map(b => `<a href="#" onclick="filterByBrand('${b}');return false">${b}</a>`).join('');
+
+  // Hero stats
+  const hs = document.getElementById('heroStats');
+  if (hs && ALL_CARS.length) {
+    const avail = ALL_CARS.filter(c => c.is_available).length;
+    hs.innerHTML = `
+      <div class="hero-stat"><strong>${ALL_CARS.length}</strong><span>Авто в каталозі</span></div>
+      <div class="hero-stat"><strong>${avail}</strong><span>В наявності</span></div>
+      <div class="hero-stat"><strong>${brands.length}</strong><span>Марок</span></div>
+    `;
+  }
+}
+
+function updateModelOptions(brandVal) {
+  const models = [...new Set(
+    ALL_CARS.filter(c => !brandVal || c.brand === brandVal).map(c => c.name).filter(Boolean)
+  )].sort();
+  ['modelSelect','qModel'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = '<option value="">Всі моделі</option>' + models.map(m => `<option value="${m}">${m}</option>`).join('');
+  });
+}
+
+function onSidebarBrandChange() {
+  updateModelOptions(document.getElementById('brandSelect').value);
+  document.getElementById('qBrand').value = document.getElementById('brandSelect').value;
+  renderCars();
+}
+function onQuickBrandChange() {
+  const v = document.getElementById('qBrand').value;
+  document.getElementById('brandSelect').value = v;
+  updateModelOptions(v);
+  applyQuickFilter();
+}
+
+// ── filter & render ───────────────────────────────────────────────────────────
+function getFilters() {
+  return {
+    brand:        document.getElementById('brandSelect').value,
+    model:        document.getElementById('modelSelect').value,
+    body:         document.getElementById('bodySelect').value,
+    fuel:         document.getElementById('fuelSelect').value,
+    transmission: document.getElementById('transmissionSelect').value,
+    avail:        document.getElementById('availCheck').checked,
+    priceMin:     parseFloat(document.getElementById('priceMin').value) || 0,
+    priceMax:     parseFloat(document.getElementById('priceMax').value) || 0,
+    yearMin:      parseYear(document.getElementById('yearMin').value),
+    yearMax:      parseYear(document.getElementById('yearMax').value),
+    mileageMin:   parseMileage(document.getElementById('mileageMin').value),
+    mileageMax:   parseMileage(document.getElementById('mileageMax').value),
+    sort:         document.getElementById('sortSelect').value,
+    search:       searchQuery,
+  };
+}
+
+function filterCars(f) {
+  return ALL_CARS.filter(c => {
+    if (f.avail && !c.is_available) return false;
+    if (f.brand && c.brand !== f.brand) return false;
+    if (f.model && c.name !== f.model) return false;
+    if (f.body  && c.category !== f.body) return false;
+    if (f.fuel) {
+      const cf = spec(c,'Паливо')||spec(c,'паливо')||spec(c,'Fuel')||'';
+      if (cf !== f.fuel) return false;
+    }
+    if (f.transmission) {
+      const ct = spec(c,'Коробка')||spec(c,'коробка')||spec(c,'КПП')||'';
+      if (ct !== f.transmission) return false;
+    }
+    if (f.priceMin && c.price < f.priceMin) return false;
+    if (f.priceMax && c.price > f.priceMax) return false;
+    const yr = parseYear(spec(c,'Рік')||spec(c,'рік'));
+    if (f.yearMin && yr && yr < f.yearMin) return false;
+    if (f.yearMax && yr && yr > f.yearMax) return false;
+    const ml = parseMileage(spec(c,'Пробіг')||spec(c,'пробіг')||spec(c,'Mileage'));
+    if (f.mileageMin != null && ml != null && ml < f.mileageMin) return false;
+    if (f.mileageMax != null && ml != null && ml > f.mileageMax) return false;
+    if (f.search) {
+      const q = f.search.toLowerCase();
+      const haystack = [c.brand, c.name, c.category, c.description].filter(Boolean).join(' ').toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function sortCars(cars, sort) {
+  const cp = [...cars];
+  switch (sort) {
+    case 'price_asc':  cp.sort((a,b) => a.price - b.price); break;
+    case 'price_desc': cp.sort((a,b) => b.price - a.price); break;
+    case 'year_desc': {
+      cp.sort((a,b) => {
+        const ay = parseYear(spec(a,'Рік')||spec(a,'рік')) || 0;
+        const by = parseYear(spec(b,'Рік')||spec(b,'рік')) || 0;
+        return by - ay;
+      }); break;
+    }
+    case 'year_asc': {
+      cp.sort((a,b) => {
+        const ay = parseYear(spec(a,'Рік')||spec(a,'рік')) || 9999;
+        const by = parseYear(spec(b,'Рік')||spec(b,'рік')) || 9999;
+        return ay - by;
+      }); break;
+    }
+    case 'mileage_asc': {
+      cp.sort((a,b) => {
+        const am = parseMileage(spec(a,'Пробіг')||spec(a,'пробіг')) ?? 9999999;
+        const bm = parseMileage(spec(b,'Пробіг')||spec(b,'пробіг')) ?? 9999999;
+        return am - bm;
+      }); break;
+    }
+    default:
+      cp.sort((a,b) => (b.is_available - a.is_available) || (b.id - a.id));
+  }
+  return cp;
+}
+
+function buildCardGrid(c) {
+  const yr   = spec(c,'Рік')   || spec(c,'рік')   || '';
+  const ml   = spec(c,'Пробіг')|| spec(c,'пробіг')|| spec(c,'Mileage') || '';
+  const fuel = spec(c,'Паливо')|| spec(c,'паливо')|| spec(c,'Fuel') || '';
+  const trans= spec(c,'Коробка')||spec(c,'коробка')||spec(c,'КПП') || '';
+  const tags = [
+    yr   ? `<span class="car-spec-tag"><span class="tag-icon">&#x1F4C5;</span>${yr}</span>` : '',
+    ml   ? `<span class="car-spec-tag"><span class="tag-icon">&#x1F6E3;&#xFE0F;</span>${fmtMileage(ml)}</span>` : '',
+    fuel ? `<span class="car-spec-tag"><span class="tag-icon">&#x26FD;</span>${fuel}</span>` : '',
+    trans? `<span class="car-spec-tag"><span class="tag-icon">&#x2699;&#xFE0F;</span>${trans}</span>` : '',
+  ].filter(Boolean).join('');
+
+  const imgHtml = c.image_url
+    ? `<img src="${c.image_url}" alt="${c.brand||''} ${c.name}" loading="lazy">`
+    : `<div class="car-img-placeholder">&#x1F697;</div>`;
+
+  const badgeHtml = !c.is_available
+    ? `<div class="car-badge-wrap"><span class="car-badge badge-unavail">Продано</span></div>`
+    : (c.old_price ? `<div class="car-badge-wrap"><span class="car-badge badge-sale">Акція</span></div>` :
+       (c.badge ? `<div class="car-badge-wrap"><span class="car-badge badge-top">${c.badge}</span></div>` : ''));
+
+  const oldPriceHtml = c.old_price
+    ? `<span class="car-old-price">${fmtPrice(c.old_price)}</span>` : '';
+  const usdPriceHtml = c.price_usd
+    ? `<span class="car-price-usd">$${Number(c.price_usd).toLocaleString('uk-UA')}</span>` : '';
+
+  return `<div class="car-card${c.is_available?'':' unavailable'}" onclick="goProduct(${c.id})">
+    <div class="car-img-wrap">${imgHtml}${badgeHtml}</div>
+    <div class="car-body">
+      ${c.brand ? `<div class="car-brand">${c.brand}</div>` : ''}
+      <div class="car-title">${c.name}</div>
+      <div class="car-specs-row">${tags}</div>
+      <div class="car-footer">
+        <div class="car-price-wrap">${oldPriceHtml}<span class="car-price">${fmtPrice(c.price)}</span>${usdPriceHtml}</div>
+        <button class="btn-view" onclick="event.stopPropagation();goProduct(${c.id})">Детальніше →</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function buildCardList(c) {
+  const yr   = spec(c,'Рік')   || spec(c,'рік')   || '';
+  const ml   = spec(c,'Пробіг')|| spec(c,'пробіг')|| spec(c,'Mileage') || '';
+  const fuel = spec(c,'Паливо')|| spec(c,'паливо')|| spec(c,'Fuel') || '';
+  const trans= spec(c,'Коробка')||spec(c,'коробка')||spec(c,'КПП') || '';
+  const vol  = spec(c,'Об\'єм')|| spec(c,'двигун')|| spec(c,'Обьем') || '';
+  const tags = [
+    yr   ? `<span class="car-spec-tag"><span class="tag-icon">&#x1F4C5;</span>${yr}</span>` : '',
+    ml   ? `<span class="car-spec-tag"><span class="tag-icon">&#x1F6E3;&#xFE0F;</span>${fmtMileage(ml)}</span>` : '',
+    fuel ? `<span class="car-spec-tag"><span class="tag-icon">&#x26FD;</span>${fuel}</span>` : '',
+    trans? `<span class="car-spec-tag"><span class="tag-icon">&#x2699;&#xFE0F;</span>${trans}</span>` : '',
+    vol  ? `<span class="car-spec-tag"><span class="tag-icon">&#x1F527;</span>${vol}</span>` : '',
+  ].filter(Boolean).join('');
+
+  const imgHtml = c.image_url
+    ? `<img src="${c.image_url}" alt="${c.brand||''} ${c.name}" loading="lazy" style="width:100%;height:100%;object-fit:cover;">`
+    : `<div class="car-img-placeholder" style="height:100%;">&#x1F697;</div>`;
+  const oldPriceHtml = c.old_price ? `<span class="car-old-price">${fmtPrice(c.old_price)}</span>` : '';
+  const usdPriceHtml = c.price_usd
+    ? `<span class="car-price-usd">$${Number(c.price_usd).toLocaleString('uk-UA')}</span>` : '';
+
+  return `<div class="car-card-list${c.is_available?'':' unavailable'}" onclick="goProduct(${c.id})">
+    <div class="car-img-wrap" style="width:220px;min-height:150px;">${imgHtml}</div>
+    <div class="car-body">
+      <div class="car-title-area">
+        ${c.brand ? `<div class="car-brand">${c.brand}</div>` : ''}
+        <div class="car-title" style="-webkit-line-clamp:unset;">${c.name}</div>
+        ${c.category ? `<div style="font-size:12px;color:var(--muted);margin-top:4px;">${c.category}</div>` : ''}
+        <div class="car-specs-row" style="margin-top:8px;">${tags}</div>
+      </div>
+      <div class="car-footer">
+        <div class="car-price-wrap">${oldPriceHtml}<span class="car-price">${fmtPrice(c.price)}</span>${usdPriceHtml}</div>
+        <button class="btn-view" onclick="event.stopPropagation();goProduct(${c.id})">Детальніше →</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderCars() {
+  const f = getFilters();
+  const filtered = filterCars(f);
+  const sorted   = sortCars(filtered, f.sort);
+  const container = document.getElementById('carsContainer');
+  const empty     = document.getElementById('emptyState');
+  const countEl   = document.getElementById('catalogCount');
+
+  countEl.textContent = `${sorted.length} авто`;
+
+  if (!sorted.length) {
+    container.innerHTML = '';
+    empty.classList.add('show');
+    return;
+  }
+  empty.classList.remove('show');
+
+  const fn = currentView === 'list' ? buildCardList : buildCardGrid;
+  container.innerHTML = sorted.map(fn).join('');
+}
+
+function setView(v) {
+  currentView = v;
+  const container = document.getElementById('carsContainer');
+  container.className = v === 'list' ? 'cars-list' : 'cars-grid';
+  document.getElementById('viewGrid').classList.toggle('active', v === 'grid');
+  document.getElementById('viewList').classList.toggle('active', v === 'list');
+  renderCars();
+}
+
+function goProduct(id) {
+  window.location.href = productUrl(id);
+}
+
+// ── Quick filters ─────────────────────────────────────────────────────────────
+function applyQuickFilter() {
+  const b = document.getElementById('qBrand').value;
+  const m = document.getElementById('qModel').value;
+  const y = document.getElementById('qYear').value;
+  const f = document.getElementById('qFuel').value;
+  document.getElementById('brandSelect').value = b;
+  document.getElementById('modelSelect').value = m;
+  if (y) document.getElementById('yearMin').value = y, document.getElementById('yearMax').value = y;
+  else document.getElementById('yearMin').value = '', document.getElementById('yearMax').value = '';
+  if (f) document.getElementById('fuelSelect').value = f;
+  renderCars();
+  document.querySelector('.main-wrap').scrollIntoView({behavior:'smooth'});
+}
+
+function filterByBrand(brand) {
+  document.getElementById('brandSelect').value = brand;
+  document.getElementById('qBrand').value = brand;
+  updateModelOptions(brand);
+  renderCars();
+  document.querySelector('.main-wrap').scrollIntoView({behavior:'smooth'});
+}
+
+// ── Search ────────────────────────────────────────────────────────────────────
+function handleSearch(val) {
+  const dd = document.getElementById('searchDropdown');
+  if (!val.trim()) { dd.style.display = 'none'; return; }
+  const q = val.toLowerCase();
+  const results = ALL_CARS.filter(c => {
+    return [c.brand, c.name, c.category].filter(Boolean).join(' ').toLowerCase().includes(q);
+  }).slice(0, 8);
+  if (!results.length) { dd.style.display = 'none'; return; }
+  dd.innerHTML = results.map(c => {
+    const imgHtml = c.image_url
+      ? `<img src="${c.image_url}" alt="${c.name}" loading="lazy">`
+      : `<div class="search-item-ph">&#x1F697;</div>`;
+    const yr = spec(c,'Рік')||spec(c,'рік')||'';
+    return `<div class="search-item" onclick="goProduct(${c.id})">
+      ${imgHtml}
+      <div class="search-item-info">
+        <div class="search-item-name">${c.brand ? c.brand+' '+c.name : c.name}</div>
+        <div class="search-item-meta">${c.category||''}${yr ? ' · '+yr : ''}</div>
+      </div>
+      <div class="search-item-price">${fmtPrice(c.price)}</div>
+    </div>`;
+  }).join('');
+  dd.style.display = 'block';
+}
+
+function applySearch() {
+  const val = document.getElementById('searchInput').value.trim();
+  searchQuery = val;
+  document.getElementById('searchDropdown').style.display = 'none';
+  renderCars();
+}
+
+function handleSearchKey(e) {
+  if (e.key === 'Enter') applySearch();
+  if (e.key === 'Escape') {
+    document.getElementById('searchDropdown').style.display = 'none';
+  }
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#searchInput') && !e.target.closest('#searchDropdown')) {
+    document.getElementById('searchDropdown').style.display = 'none';
+  }
+});
+
+// ── Reset ─────────────────────────────────────────────────────────────────────
+function resetFilters() {
+  ['brandSelect','modelSelect','bodySelect','fuelSelect','transmissionSelect','qBrand','qModel','qYear','qFuel'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  ['priceMin','priceMax','yearMin','yearMax','mileageMin','mileageMax'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('availCheck').checked = false;
+  document.getElementById('searchInput').value = '';
+  searchQuery = '';
+  updateModelOptions('');
+  renderCars();
+}
+
+function toggleFilters() {
+  document.getElementById('filtersPanel').classList.toggle('open');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+buildOptions();
+updateModelOptions('');
+renderCars();
+</script>
+</body>
+</html>

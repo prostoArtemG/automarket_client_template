@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="{{ lang | default('uk') }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% if product.brand %}{{ product.brand }} {{ product.name }}{% else %}{{ product.name }}{% endif %} — {{ client.shop_title }}</title>
+  {% if product.seo_description %}<meta name="description" content="{{ product.seo_description }}">{% else %}<meta name="description" content="{{ product.brand or '' }} {{ product.name }} — {{ client.shop_title }}. Залиште заявку онлайн.">{% endif %}
+  {% if product.seo_keywords %}<meta name="keywords" content="{{ product.seo_keywords }}">{% endif %}
+  <meta property="og:title" content="{% if product.brand %}{{ product.brand }} {{ product.name }}{% else %}{{ product.name }}{% endif %} — {{ client.shop_title }}">
+  {% if product.image_url %}<meta property="og:image" content="{{ product.image_url }}">{% endif %}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0d1117; color: #e6edf3; line-height: 1.6;
+      min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden;
+    }
+    a { color: inherit; text-decoration: none; }
+    img { max-width: 100%; display: block; }
+    button { cursor: pointer; font-family: inherit; }
+    .container { max-width: 1280px; margin: 0 auto; padding: 0 20px; }
+
+    :root {
+      --accent: #e8a020;
+      --accent-hover: #d08010;
+      --accent-10: rgba(232,160,32,.12);
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-2: #1c2130;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --border: #30363d;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 16px rgba(0,0,0,.4);
+    }
+    .header-inner { display: flex; align-items: center; gap: 16px; padding: 14px 0; }
+    .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; }
+    .logo-img { height: 38px; width: 38px; object-fit: contain; border-radius: 8px; }
+    .logo-icon {
+      width: 42px; height: 42px; border-radius: 10px; background: var(--accent);
+      color: #000; display: flex; align-items: center; justify-content: center; font-size: 22px;
+    }
+    .logo-name { font-size: 18px; font-weight: 800; color: var(--accent); letter-spacing: -.4px; }
+    .header-spacer { flex: 1; }
+    .btn-back {
+      display: flex; align-items: center; gap: 7px;
+      background: var(--bg); border: 1.5px solid var(--border);
+      border-radius: 9px; padding: 9px 16px; font-size: 14px; font-weight: 600;
+      color: var(--text); transition: border-color .2s, background .2s;
+    }
+    .btn-back:hover { border-color: var(--accent); background: var(--accent-10); color: var(--accent); }
+
+    /* ── Breadcrumb ── */
+    .breadcrumb {
+      padding: 16px 0 10px; display: flex; flex-wrap: wrap; align-items: center;
+      gap: 6px; font-size: 13px; color: var(--muted);
+    }
+    .breadcrumb a { color: var(--muted); transition: color .15s; }
+    .breadcrumb a:hover { color: var(--accent); }
+    .breadcrumb-sep { color: var(--border); }
+    .breadcrumb span { color: var(--text); font-weight: 500; }
+
+    /* ── Main product section ── */
+    .product-section { padding: 0 0 60px; }
+    .product-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; }
+
+    /* Gallery */
+    .product-gallery {
+      background: var(--surface); border-radius: 16px;
+      border: 1px solid var(--border); overflow: hidden; position: relative;
+    }
+    .product-img-main {
+      width: 100%; aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center;
+      background: var(--bg); overflow: hidden;
+    }
+    .product-img-main img { width: 100%; height: 100%; object-fit: cover; }
+    .product-img-placeholder { font-size: 96px; color: var(--muted); }
+    .gallery-badge {
+      position: absolute; top: 14px; left: 14px;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .gallery-badge span {
+      font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 6px; text-transform: uppercase;
+    }
+    .badge-sale   { background: #e63222; color: #fff; }
+    .badge-top    { background: #2563eb; color: #fff; }
+    .badge-unavail{ background: #555; color: #fff; }
+    .badge-custom { background: var(--accent); color: #000; }
+
+    /* Info panel */
+    .product-info { display: flex; flex-direction: column; gap: 20px; }
+    .info-brand { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--accent); }
+    .info-title { font-size: clamp(22px, 3vw, 32px); font-weight: 900; line-height: 1.2; color: #fff; }
+    .info-category { font-size: 13px; color: var(--muted); }
+    .avail-row { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+    .avail-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .avail-yes { color: #3fb950; } .avail-yes .avail-dot { background: #3fb950; }
+    .avail-no  { color: #8b949e; } .avail-no  .avail-dot { background: #8b949e; }
+
+    /* Price */
+    .price-block {
+      background: var(--surface-2); border: 1px solid var(--border); border-radius: 14px;
+      padding: 20px 24px; display: flex; flex-direction: column; gap: 6px;
+    }
+    .price-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+    .price-old { font-size: 14px; color: var(--muted); text-decoration: line-through; }
+    .price-current { font-size: 36px; font-weight: 900; color: var(--accent); line-height: 1; }
+    .price-usd { font-size: 16px; font-weight: 700; color: var(--muted); }
+    .price-discount {
+      display: inline-flex; align-items: center;
+      background: rgba(230,50,34,.15); color: #e63222;
+      border-radius: 6px; padding: 2px 8px; font-size: 12px; font-weight: 700;
+    }
+
+    /* Key specs row */
+    .key-specs {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+    }
+    .key-spec {
+      background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px; text-align: center;
+    }
+    .key-spec-icon { font-size: 22px; margin-bottom: 4px; }
+    .key-spec-val  { font-size: 14px; font-weight: 700; color: var(--text); line-height: 1.2; }
+    .key-spec-label{ font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; margin-top: 2px; }
+
+    /* CTA buttons */
+    .cta-row { display: flex; flex-direction: column; gap: 10px; }
+    .btn-primary {
+      width: 100%; padding: 16px; background: var(--accent); color: #000; border: none;
+      border-radius: 12px; font-size: 16px; font-weight: 800; cursor: pointer;
+      transition: background .2s, transform .15s; display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); }
+    .btn-secondary {
+      width: 100%; padding: 14px; background: transparent; color: var(--text); border: 1.5px solid var(--border);
+      border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer;
+      transition: border-color .2s, background .2s; display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-secondary:hover { border-color: var(--accent); background: var(--accent-10); color: var(--accent); }
+
+    /* ── Description ── */
+    .section-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+      padding: 24px 28px; margin-bottom: 20px;
+    }
+    .section-title {
+      font-size: 16px; font-weight: 800; margin-bottom: 16px;
+      display: flex; align-items: center; gap: 8px; color: #fff;
+    }
+    .section-title::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+    .desc-text { font-size: 15px; color: var(--muted); line-height: 1.8; white-space: pre-line; }
+    .video-frame {
+      width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 14px; background: #000;
+    }
+    .video-links { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
+    .video-link {
+      display: inline-flex; align-items: center; gap: 8px; padding: 12px 16px;
+      border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2);
+      font-size: 14px; font-weight: 600; color: var(--text);
+    }
+    .video-link:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Specs table ── */
+    .specs-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+    }
+    .spec-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 0; border-bottom: 1px solid var(--border); gap: 12px;
+    }
+    .spec-row:last-child { border-bottom: none; }
+    .spec-row:nth-child(odd)  { padding-right: 20px; }
+    .spec-row:nth-child(even) { padding-left:  20px; border-left: 1px solid var(--border); }
+    .spec-name  { font-size: 13px; color: var(--muted); font-weight: 500; }
+    .spec-value { font-size: 13px; color: var(--text); font-weight: 700; text-align: right; }
+
+    /* Fallback: raw specs text */
+    .specs-raw {
+      background: var(--bg); border-radius: 8px; padding: 14px 16px;
+      font-size: 13px; color: var(--muted); white-space: pre-line; line-height: 1.8;
+    }
+
+    /* ── Request form ── */
+    .form-card {
+      background: var(--surface-2); border: 1px solid var(--border); border-radius: 16px;
+      padding: 28px; margin-bottom: 20px;
+    }
+    .form-desc { font-size: 14px; color: var(--muted); margin-bottom: 20px; line-height: 1.6; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .form-field { display: flex; flex-direction: column; gap: 6px; }
+    .form-field.full { grid-column: 1 / -1; }
+    .form-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+    .form-input, .form-textarea {
+      border: 1.5px solid var(--border); border-radius: 10px; padding: 12px 14px;
+      font-size: 14px; font-family: inherit; background: var(--bg); color: var(--text);
+      outline: none; transition: border-color .2s; width: 100%;
+    }
+    .form-input:focus, .form-textarea:focus { border-color: var(--accent); }
+    .form-input.error { border-color: #e63222; }
+    .form-textarea { resize: vertical; min-height: 80px; }
+    .field-error { font-size: 12px; color: #e63222; display: none; margin-top: -4px; }
+    .field-error.show { display: block; }
+    .form-car-summary {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+      padding: 14px 16px; margin-bottom: 16px; display: flex; gap: 14px; align-items: center;
+    }
+    .form-car-img {
+      width: 80px; height: 60px; border-radius: 8px; object-fit: cover;
+      border: 1px solid var(--border); flex-shrink: 0;
+    }
+    .form-car-img-ph {
+      width: 80px; height: 60px; border-radius: 8px; background: var(--surface);
+      border: 1px solid var(--border); display: flex; align-items: center;
+      justify-content: center; font-size: 28px; flex-shrink: 0;
+    }
+    .form-car-name { font-size: 15px; font-weight: 700; }
+    .form-car-price { font-size: 16px; font-weight: 900; color: var(--accent); }
+
+    /* Success state */
+    .form-success { display: none; text-align: center; padding: 32px 0; }
+    .form-success.show { display: block; }
+    .success-icon { font-size: 56px; margin-bottom: 14px; }
+    .success-title { font-size: 22px; font-weight: 800; margin-bottom: 8px; color: #fff; }
+    .success-text { font-size: 15px; color: var(--muted); line-height: 1.6; }
+
+    /* ── Footer ── */
+    .footer { background: #080c10; border-top: 1px solid var(--border); margin-top: auto; }
+    .footer-bottom {
+      padding: 20px; font-size: 13px; color: var(--muted); text-align: center;
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+    }
+    .footer-contacts { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; justify-content: center; padding: 20px; border-bottom: 1px solid var(--border); }
+    .footer-contacts a { font-size: 14px; color: var(--muted); display: flex; align-items: center; gap: 6px; transition: color .15s; }
+    .footer-contacts a:hover { color: var(--accent); }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+      background: #1c2130; color: var(--text); border: 1px solid var(--border);
+      padding: 14px 24px; border-radius: 12px; font-size: 14px; font-weight: 600;
+      opacity: 0; transition: all .3s; pointer-events: none; z-index: 9999;
+      min-width: 260px; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,.5);
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ── Responsive ── */
+    @media (max-width: 960px) {
+      .product-grid { grid-template-columns: 1fr; gap: 28px; }
+      .specs-grid { grid-template-columns: 1fr; }
+      .spec-row:nth-child(odd)  { padding-right: 0; }
+      .spec-row:nth-child(even) { padding-left: 0; border-left: none; }
+      .key-specs { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 640px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .key-specs { grid-template-columns: repeat(2, 1fr); }
+      .cta-row { gap: 8px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="container header-inner">
+    <a href="{{ catalog_url }}" class="logo">
+      {% if client.logo_url %}
+        <img src="{{ client.logo_url }}" alt="{{ client.shop_title }}" class="logo-img">
+      {% else %}
+        <div class="logo-icon">&#x1F697;</div>
+      {% endif %}
+      <div>
+        <div class="logo-name">{{ client.shop_title }}</div>
+      </div>
+    </a>
+    <div class="header-spacer"></div>
+    <a class="btn-back" href="{{ catalog_url }}">&#x2190; До каталогу</a>
+  </div>
+</header>
+
+<!-- BREADCRUMB -->
+<div class="container">
+  <nav class="breadcrumb">
+    <a href="{{ catalog_url }}">{{ client.shop_title }}</a>
+    <span class="breadcrumb-sep">/</span>
+    {% if product.category %}<a href="{{ catalog_url }}">{{ product.category }}</a><span class="breadcrumb-sep">/</span>{% endif %}
+    <span>{% if product.brand %}{{ product.brand }} {% endif %}{{ product.name }}</span>
+  </nav>
+</div>
+
+<!-- PRODUCT SECTION -->
+<div class="container product-section">
+  <div class="product-grid">
+
+    <!-- GALLERY -->
+    <div class="product-gallery">
+      <div class="product-img-main">
+        {% if product.image_url %}
+          <img src="{{ product.image_url }}" alt="{{ product.brand or '' }} {{ product.name }}" id="mainImg">
+        {% else %}
+          <div class="product-img-placeholder">&#x1F697;</div>
+        {% endif %}
+      </div>
+      <div class="gallery-badge">
+        {% if not product.is_available %}
+          <span class="badge-unavail">Продано</span>
+        {% elif product.old_price %}
+          <span class="badge-sale">Акція</span>
+        {% elif product.badge %}
+          <span class="badge-custom">{{ product.badge }}</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- INFO -->
+    <div class="product-info">
+      {% if product.brand %}<div class="info-brand">{{ product.brand }}</div>{% endif %}
+      <h1 class="info-title">{{ product.name }}</h1>
+      {% if product.category %}<div class="info-category">{{ product.category }}</div>{% endif %}
+
+      <div class="avail-row {% if product.is_available %}avail-yes{% else %}avail-no{% endif %}">
+        <span class="avail-dot"></span>
+        {% if product.is_available %}В наявності{% else %}Продано{% endif %}
+      </div>
+
+      <!-- KEY SPECS from specs_map -->
+      {% set yr   = product.specs_map.get('Рік') or product.specs_map.get('рік') or product.specs_map.get('Year') %}
+      {% set ml   = product.specs_map.get('Пробіг') or product.specs_map.get('пробіг') or product.specs_map.get('Mileage') %}
+      {% set fuel = product.specs_map.get('Паливо') or product.specs_map.get('паливо') or product.specs_map.get('Fuel') %}
+      {% set trans= product.specs_map.get('Коробка') or product.specs_map.get('коробка') or product.specs_map.get('КПП') %}
+      {% set vol  = product.specs_map.get("Об'єм двигателя") or product.specs_map.get("Об'єм") or product.specs_map.get('Обьем') or product.specs_map.get('Engine') %}
+      {% set city = product.specs_map.get('Місто') or product.specs_map.get('місто') or product.specs_map.get('City') %}
+
+      {% if yr or ml or fuel or trans %}
+      <div class="key-specs">
+        {% if yr %}
+        <div class="key-spec">
+          <div class="key-spec-icon">&#x1F4C5;</div>
+          <div class="key-spec-val">{{ yr }}</div>
+          <div class="key-spec-label">Рік</div>
+        </div>
+        {% endif %}
+        {% if ml %}
+        <div class="key-spec">
+          <div class="key-spec-icon">&#x1F6E3;&#xFE0F;</div>
+          <div class="key-spec-val">{{ ml }}</div>
+          <div class="key-spec-label">Пробіг</div>
+        </div>
+        {% endif %}
+        {% if fuel %}
+        <div class="key-spec">
+          <div class="key-spec-icon">&#x26FD;</div>
+          <div class="key-spec-val">{{ fuel }}</div>
+          <div class="key-spec-label">Паливо</div>
+        </div>
+        {% endif %}
+        {% if trans %}
+        <div class="key-spec">
+          <div class="key-spec-icon">&#x2699;&#xFE0F;</div>
+          <div class="key-spec-val">{{ trans }}</div>
+          <div class="key-spec-label">Коробка</div>
+        </div>
+        {% endif %}
+        {% if vol %}
+        <div class="key-spec">
+          <div class="key-spec-icon">&#x1F527;</div>
+          <div class="key-spec-val">{{ vol }}</div>
+          <div class="key-spec-label">Двигун</div>
+        </div>
+        {% endif %}
+        {% if city %}
+        <div class="key-spec">
+          <div class="key-spec-icon">&#x1F4CD;</div>
+          <div class="key-spec-val">{{ city }}</div>
+          <div class="key-spec-label">Місто</div>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <!-- PRICE -->
+      <div class="price-block">
+        <div class="price-label">Ціна</div>
+        {% if product.old_price %}
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span class="price-old">{{ '{:,.0f}'.format(product.old_price) }} грн</span>
+          <span class="price-discount">-{{ ((1 - product.price / product.old_price) * 100) | int }}%</span>
+        </div>
+        {% endif %}
+        <div class="price-current">{{ '{:,.0f}'.format(product.price) }} грн</div>
+        {% if product.price_usd %}
+        <div class="price-usd">${{ '{:,.0f}'.format(product.price_usd) }}</div>
+        {% endif %}
+      </div>
+
+      <!-- CTA -->
+      {% if product.is_available %}
+      <div class="cta-row">
+        <button class="btn-primary" onclick="scrollToForm()">&#x1F4DE; Залишити заявку</button>
+        {% if client.telegram_url %}
+        <a class="btn-secondary" href="{{ client.telegram_url }}" target="_blank" rel="noopener">&#x2708;&#xFE0F; Написати в Telegram</a>
+        {% elif client.phone %}
+        <a class="btn-secondary" href="tel:{{ client.phone }}">&#x1F4DE; Зателефонувати</a>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="cta-row">
+        <button class="btn-secondary" disabled style="opacity:.6;cursor:not-allowed;">Авто продано</button>
+        {% if client.telegram_url %}
+        <a class="btn-secondary" href="{{ client.telegram_url }}" target="_blank" rel="noopener">&#x2708;&#xFE0F; Схожі пропозиції</a>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- DESCRIPTION -->
+  {% if product.description %}
+  <div class="section-card" style="margin-top:32px;">
+    <div class="section-title">&#x1F4DD; Опис</div>
+    <p class="desc-text">{{ product.description }}</p>
+  </div>
+  {% endif %}
+
+  {% if product.video_url %}
+  <div class="section-card">
+    <div class="section-title">&#x1F3AC; Відео огляд</div>
+    {% if product.video_source_type == 'youtube' and 'youtu.be/' in product.video_url %}
+      <iframe
+        class="video-frame"
+        src="https://www.youtube.com/embed/{{ product.video_url.split('youtu.be/')[-1].split('?')[0] }}"
+        title="Відео огляд"
+        allowfullscreen>
+      </iframe>
+    {% elif product.video_source_type == 'youtube' and 'v=' in product.video_url %}
+      <iframe
+        class="video-frame"
+        src="https://www.youtube.com/embed/{{ product.video_url.split('v=')[-1].split('&')[0] }}"
+        title="Відео огляд"
+        allowfullscreen>
+      </iframe>
+    {% elif product.video_source_type == 'mp4' %}
+      <video class="video-frame" controls preload="metadata">
+        <source src="{{ product.video_url }}" type="video/mp4">
+      </video>
+    {% endif %}
+    {% if product.video_caption %}
+      <p class="desc-text" style="margin-top:16px;">{{ product.video_caption }}</p>
+    {% endif %}
+    <div class="video-links">
+      <a class="video-link" href="{{ product.video_url }}" target="_blank" rel="noopener">
+        &#x25B6;&#xFE0F; Відкрити відео
+      </a>
+      {% if client.telegram_url %}
+      <a class="video-link" href="{{ client.telegram_url }}" target="_blank" rel="noopener">
+        &#x2708;&#xFE0F; Написати по авто
+      </a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- SPECS TABLE -->
+  {% if product.specs_map %}
+  <div class="section-card">
+    <div class="section-title">&#x1F527; Характеристики</div>
+    <div class="specs-grid">
+      {% set spec_order = ['Рік','Пробіг','Паливо','Коробка',"Об'єм двигателя","Об'єм","Обьем","Engine","Двигун","Тип кузова","Кузов","Привід","ABS","Місто","Стан","Колір","Клімат-контроль"] %}
+      {% set shown = [] %}
+      {# Show in preferred order first #}
+      {% for key in spec_order %}
+        {% if key in product.specs_map %}
+          {% set _ = shown.append(key) %}
+          <div class="spec-row">
+            <span class="spec-name">{{ key }}</span>
+            <span class="spec-value">{{ product.specs_map[key] }}</span>
+          </div>
+        {% endif %}
+      {% endfor %}
+      {# Show the rest #}
+      {% for key, val in product.specs_map.items() %}
+        {% if key not in shown %}
+          <div class="spec-row">
+            <span class="spec-name">{{ key }}</span>
+            <span class="spec-value">{{ val }}</span>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+  {% elif product.specs %}
+  <div class="section-card">
+    <div class="section-title">&#x1F527; Характеристики</div>
+    <div class="specs-raw">{{ product.specs }}</div>
+  </div>
+  {% endif %}
+
+  <!-- REQUEST FORM -->
+  {% if product.is_available %}
+  <div class="form-card" id="requestForm">
+    <div class="section-title">&#x1F4DE; Залишити заявку</div>
+
+    <!-- Car summary in form -->
+    <div class="form-car-summary">
+      {% if product.image_url %}
+        <img src="{{ product.image_url }}" alt="{{ product.name }}" class="form-car-img">
+      {% else %}
+        <div class="form-car-img-ph">&#x1F697;</div>
+      {% endif %}
+      <div>
+        <div class="form-car-name">{% if product.brand %}{{ product.brand }} {% endif %}{{ product.name }}</div>
+        {% if product.category %}<div style="font-size:12px;color:var(--muted);margin-top:2px;">{{ product.category }}</div>{% endif %}
+        <div class="form-car-price">{{ '{:,.0f}'.format(product.price) }} грн{% if product.price_usd %} / ${{ '{:,.0f}'.format(product.price_usd) }}{% endif %}</div>
+      </div>
+    </div>
+
+    <p class="form-desc">Заповніть форму, і наш менеджер зв'яжеться з вами найближчим часом для уточнення деталей та організації перегляду.</p>
+
+    <div id="formBody">
+      <div class="form-grid">
+        <div class="form-field">
+          <label class="form-label">Ваше ім'я *</label>
+          <input type="text" class="form-input" id="reqName" placeholder="Іван Іваненко">
+          <span class="field-error" id="errName">Будь ласка, введіть ім'я</span>
+        </div>
+        <div class="form-field">
+          <label class="form-label">Номер телефону *</label>
+          <input type="tel" class="form-input" id="reqPhone" placeholder="+380 __ ___ ____">
+          <span class="field-error" id="errPhone">Будь ласка, введіть телефон</span>
+        </div>
+        <div class="form-field">
+          <label class="form-label">Місто</label>
+          <input type="text" class="form-input" id="reqCity" placeholder="Київ">
+        </div>
+        <div class="form-field">
+          <label class="form-label">Зручний час дзвінка</label>
+          <input type="text" class="form-input" id="reqTime" placeholder="10:00 — 18:00">
+        </div>
+        <div class="form-field full">
+          <label class="form-label">Коментар</label>
+          <textarea class="form-textarea" id="reqComment" rows="3" placeholder="Питання, побажання..."></textarea>
+        </div>
+      </div>
+      <button class="btn-primary" style="margin-top:16px;" onclick="submitRequest()" id="submitBtn">
+        &#x1F4E8; Надіслати заявку
+      </button>
+    </div>
+
+    <div class="form-success" id="formSuccess">
+      <div class="success-icon">&#x2705;</div>
+      <div class="success-title">Заявку отримано!</div>
+      <p class="success-text">Дякуємо! Наш менеджер зв'яжеться з вами найближчим часом.<br>Очікуйте дзвінка або повідомлення.</p>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="footer-contacts">
+    {% if client.phone %}<a href="tel:{{ client.phone }}">&#x1F4DE; {{ client.phone }}</a>{% endif %}
+    {% if client.address %}<a href="#">&#x1F4CD; {{ client.address }}</a>{% endif %}
+    {% if client.telegram_url %}<a href="{{ client.telegram_url }}" target="_blank" rel="noopener">&#x2708;&#xFE0F; Telegram</a>{% endif %}
+    {% if client.instagram_url %}<a href="{{ client.instagram_url }}" target="_blank" rel="noopener">&#x1F4F7; Instagram</a>{% endif %}
+  </div>
+  <div class="footer-bottom">
+    <span>&#x00A9; {{ client.shop_title }}</span>
+    <a href="{{ catalog_url }}" style="color:var(--accent);">&#x2190; До каталогу</a>
+    <span>Всі права захищені</span>
+  </div>
+</footer>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+const SLUG            = {{ client.slug | tojson }};
+const PLATFORM_DOMAIN = {{ platform_domain | tojson }};
+const PRODUCT_ID      = {{ product.id }};
+
+const isSubdomainMode = !!PLATFORM_DOMAIN
+  && location.hostname !== PLATFORM_DOMAIN
+  && location.hostname.endsWith("." + PLATFORM_DOMAIN);
+
+function orderUrl() {
+  return isSubdomainMode ? "/order" : "/site/" + SLUG + "/order";
+}
+const PRODUCT_NAME = {{ ((product.brand or '') + ' ' + product.name) | tojson }};
+const PRODUCT_PRICE = {{ product.price }};
+
+function scrollToForm() {
+  const el = document.getElementById('requestForm');
+  if (el) el.scrollIntoView({behavior: 'smooth', block: 'start'});
+  setTimeout(() => document.getElementById('reqName').focus(), 600);
+}
+
+function showToast(msg, dur=3500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+async function submitRequest() {
+  const name    = document.getElementById('reqName').value.trim();
+  const phone   = document.getElementById('reqPhone').value.trim();
+  const city    = document.getElementById('reqCity').value.trim();
+  const time    = document.getElementById('reqTime').value.trim();
+  const comment = document.getElementById('reqComment').value.trim();
+
+  let ok = true;
+  document.getElementById('reqName').classList.remove('error');
+  document.getElementById('reqPhone').classList.remove('error');
+  document.getElementById('errName').classList.remove('show');
+  document.getElementById('errPhone').classList.remove('show');
+
+  if (!name) {
+    document.getElementById('reqName').classList.add('error');
+    document.getElementById('errName').classList.add('show');
+    ok = false;
+  }
+  if (!phone) {
+    document.getElementById('reqPhone').classList.add('error');
+    document.getElementById('errPhone').classList.add('show');
+    ok = false;
+  }
+  if (!ok) return;
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Надсилання...';
+
+  const commentFull = [
+    `Авто: ${PRODUCT_NAME}`,
+    `Ціна: $${PRODUCT_PRICE.toLocaleString('uk-UA')}`,
+    time ? `Зручний час: ${time}` : '',
+    comment,
+  ].filter(Boolean).join('\n');
+
+  try {
+    const resp = await fetch(orderUrl(), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        name, phone,
+        city: city || '',
+        comment: commentFull,
+        items: [{id: PRODUCT_ID, name: PRODUCT_NAME, price: PRODUCT_PRICE, qty: 1}],
+      }),
+    });
+    if (resp.ok) {
+      document.getElementById('formBody').style.display = 'none';
+      document.getElementById('formSuccess').classList.add('show');
+      document.getElementById('requestForm').scrollIntoView({behavior: 'smooth'});
+    } else {
+      showToast('Помилка. Спробуйте зв\'язатися з нами напряму.');
+      btn.disabled = false;
+      btn.innerHTML = '&#x1F4E8; Надіслати заявку';
+    }
+  } catch {
+    showToast('Помилка мережі. Спробуйте ще раз.');
+    btn.disabled = false;
+    btn.innerHTML = '&#x1F4E8; Надіслати заявку';
+  }
+}
+</script>
+</body>
+</html>
