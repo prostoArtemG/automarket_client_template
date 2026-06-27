@@ -442,12 +442,12 @@ _PROD_EDIT_PROMPTS: dict[str, str] = {
     "name":            "✏️ Введіть нову назву/модель товару:",
     "description":     "📝 Введіть короткий опис товару (або «-» щоб очистити):",
     "brand":           "🏢 Введіть новий бренд (або «-» щоб очистити):",
-    "category":        "📂 Введіть нову категорію (або «-» щоб очистити):",
-    "group_name":      "📁 Введіть нову групу (або «-» щоб очистити):",
+    "category":        "📂 Введіть нову категорію (або «-» щоб очистити):\n\nПриклад: Седан, Кросовер, Хетчбек.\nКоротко, без бренду, року та ціни.",
+    "group_name":      "📁 Введіть нову групу (або «-» щоб очистити):\n\nПриклад: Легкові авто, Електромобілі, Комерційні авто.\nЦе верхній розділ каталогу, який об'єднує категорії.",
     "price":           "💰 Введіть нову ціну (наприклад: 150):",
     "price_usd":       "💵 Введіть ціну в доларах (наприклад: 4500) або «-» щоб очистити:",
     "old_price":       "🏷 Введіть стару ціну (або «-» щоб очистити):",
-    "specs":           "📋 Введіть нові характеристики (або «-» щоб очистити):",
+    "specs":           "📋 Введіть нові характеристики (або «-» щоб очистити):\n\nРекомендований формат:\nРік: 2021\nПробіг: 54 000 км\nПаливо: Дизель\nКоробка: Автомат\nМісто: Київ\n\nТакож підтримується формат через = або >.",
     "seo_title":       "📝 SEO Title — назва у браузері та пошукових системах.\nВведіть або «-» щоб очистити:",
     "seo_description": "📄 SEO Description — опис для пошукових систем.\nВведіть або «-» щоб очистити:",
     "seo_keywords":    "🔑 SEO Keywords — ключові слова через кому.\nВведіть або «-» щоб очистити:",
@@ -1951,7 +1951,12 @@ async def _go_to_category(msg: Message, state: FSMContext) -> None:
         cats = list(await session.scalars(q.distinct().order_by(Product.category)))
     await state.update_data(possible_categories=cats)
     await state.set_state(CmsAddProduct.category)
-    await msg.answer("Крок 2 — Виберіть або введіть категорію:", reply_markup=_categories_kb(cats))
+    await msg.answer(
+        "Крок 2 — Виберіть або введіть категорію:\n\n"
+        "Категорія = тип авто всередині групи.\n"
+        "Приклади: Седан, Кросовер, Хетчбек, Універсал.",
+        reply_markup=_categories_kb(cats),
+    )
 
 
 async def _go_to_brand(msg: Message, state: FSMContext) -> None:
@@ -1984,7 +1989,12 @@ async def cms_group_pick(cb: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(F.data == "cms:group:new", StateFilter(CmsAddProduct.group))
 async def cms_group_new(cb: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(CmsAddProduct.group_input)
-    await cb.message.answer("Введіть нову групу товарів:")
+    await cb.message.answer(
+        "Введіть нову групу товарів:\n\n"
+        "Група = великий розділ каталогу.\n"
+        "Приклади: Легкові авто, Електромобілі, Комерційні авто.\n"
+        "Пишіть коротко, без бренду, ціни та року.",
+    )
     await cb.answer()
 
 
@@ -2027,7 +2037,12 @@ async def cms_cat_pick(cb: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(F.data == "cms:cat:new", StateFilter(CmsAddProduct.category))
 async def cms_cat_new(cb: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(CmsAddProduct.category_input)
-    await cb.message.answer("Введіть нову категорію:")
+    await cb.message.answer(
+        "Введіть нову категорію:\n\n"
+        "Категорія = підтип всередині групи.\n"
+        "Приклади: Седан, Кросовер, Хетчбек, Купе.\n"
+        "Пишіть коротко, без бренду та технічних характеристик.",
+    )
     await cb.answer()
 
 
@@ -2112,9 +2127,18 @@ async def cms_skip_description(cb: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(CmsAddProduct.specs)
     await cb.message.answer(
         "Крок 6 — Характеристики товару:\n\nВставте всі характеристики одним повідомленням\n"
-        "або вводьте по одній (наприклад: Площа: 35 м²).\n"
+        "або вводьте по одній.\n"
+        "Найкраще працює формат «Назва: Значення».\n\n"
+        "Рекомендовані ключі для авто:\n"
+        "  Рік: 2021\n"
+        "  Пробіг: 54 000 км\n"
+        "  Паливо: Дизель\n"
+        "  Коробка: Автомат\n"
+        "  Місто: Київ\n"
+        "  Тип кузова: Седан\n"
         "Підтримуються формати:\n"
         "  Назва: Значення\n"
+        "  Назва = Значення\n"
         "  Назва > Значення\n"
         "  К1 > В1 > К2 > В2 > ...\n"
         "Коли закінчите — натисніть ✅ Готово.",
@@ -2131,9 +2155,18 @@ async def cms_add_description(message: Message, state: FSMContext) -> None:
     await state.set_state(CmsAddProduct.specs)
     await message.answer(
         "Крок 6 — Характеристики товару:\n\nВставте всі характеристики одним повідомленням\n"
-        "або вводьте по одній (наприклад: Площа: 35 м²).\n"
+        "або вводьте по одній.\n"
+        "Найкраще працює формат «Назва: Значення».\n\n"
+        "Рекомендовані ключі для авто:\n"
+        "  Рік: 2021\n"
+        "  Пробіг: 54 000 км\n"
+        "  Паливо: Дизель\n"
+        "  Коробка: Автомат\n"
+        "  Місто: Київ\n"
+        "  Тип кузова: Седан\n"
         "Підтримуються формати:\n"
         "  Назва: Значення\n"
+        "  Назва = Значення\n"
         "  Назва > Значення\n"
         "  К1 > В1 > К2 > В2 > ...\n"
         "Коли закінчите — натисніть ✅ Готово.",
@@ -2187,7 +2220,8 @@ async def cms_add_specs(message: Message, state: FSMContext) -> None:
         await state.update_data(specs_items=items)
         await message.answer(
             "⚠️ Не вдалось розпізнати формат. Збережено як є.\n"
-            "Підтримувані формати: Назва: Значення  /  Назва > Значення\n\n"
+            "Підтримувані формати: Назва: Значення  /  Назва = Значення  /  Назва > Значення\n"
+            "Приклад: Пробіг: 145 000 км\n\n"
             + _specs_list_text(items),
             reply_markup=_specs_kb(),
         )
