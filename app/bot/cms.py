@@ -699,6 +699,7 @@ def _parse_specs_text(text: str | None) -> list[tuple[str, str]]:
 
       Single-line:
         "Назва: Значення"
+        "Назва=Значення"
         "Назва - Значення"     (space-dash-space)
         "Назва – Значення"     (em dash)
         "Назва > Значення"
@@ -733,8 +734,8 @@ def _parse_specs_text(text: str | None) -> list[tuple[str, str]]:
         return normalized in {"характеристики", "specifications", "specs", "опистовару", "opistovar"}
 
     def _looks_like_name_line(s: str) -> bool:
-        """True if line looks like a spec name (has ':', '>', ' - ', ' – ')."""
-        return (":" in s or ">" in s or " - " in s or " – " in s)
+        """True if line looks like a spec name/value line."""
+        return ("=" in s or ":" in s or ">" in s or " - " in s or " – " in s)
 
     i = 0
     while i < len(lines):
@@ -752,6 +753,13 @@ def _parse_specs_text(text: str | None) -> list[tuple[str, str]]:
                 n, v = parts[j].strip(), parts[j + 1].strip()
                 if n and v:
                     result.append((n, v))
+            i += 1
+
+        elif "=" in line:
+            n, _, v = line.partition("=")
+            n, v = n.strip(), v.strip()
+            if n and v:
+                result.append((n, v))
             i += 1
 
         elif ":" in line:
