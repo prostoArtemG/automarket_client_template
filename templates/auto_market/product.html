@@ -586,16 +586,18 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const SLUG            = {{ client.slug | tojson }};
-const PLATFORM_DOMAIN = {{ platform_domain | tojson }};
+const SLUG            = {{ slug | default('', true) | tojson }};
+const PLATFORM_DOMAIN = {{ platform_domain | default('', true) | tojson }};
 const PRODUCT_ID      = {{ product.id }};
 
 const isSubdomainMode = !!PLATFORM_DOMAIN
   && location.hostname !== PLATFORM_DOMAIN
   && location.hostname.endsWith("." + PLATFORM_DOMAIN);
 
+const isPlatformPathMode = !!SLUG && location.pathname.startsWith("/site/");
+
 function orderUrl() {
-  return isSubdomainMode ? "/order" : "/site/" + SLUG + "/order";
+  return (isSubdomainMode || !isPlatformPathMode) ? "/order" : "/site/" + SLUG + "/order";
 }
 const PRODUCT_NAME = {{ ((product.brand or '') + ' ' + product.name) | tojson }};
 const PRODUCT_PRICE = {{ product.price }};

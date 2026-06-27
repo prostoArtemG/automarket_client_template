@@ -589,22 +589,24 @@
 
 <!-- DATA -->
 <script>
-const SLUG            = {{ client.slug | tojson }};
+const SLUG            = {{ slug | default('', true) | tojson }};
 const ALL_CARS        = {{ products | tojson }};
-const PLATFORM_DOMAIN = {{ platform_domain | tojson }};
+const PLATFORM_DOMAIN = {{ platform_domain | default('', true) | tojson }};
 
 /* True when opened via {slug}.shopplatform.app (subdomain mode) */
 const isSubdomainMode = !!PLATFORM_DOMAIN
   && location.hostname !== PLATFORM_DOMAIN
   && location.hostname.endsWith("." + PLATFORM_DOMAIN);
 
+const isPlatformPathMode = !!SLUG && location.pathname.startsWith("/site/");
+
 function productUrl(id) {
-  return isSubdomainMode
+  return (isSubdomainMode || !isPlatformPathMode)
     ? "/product/" + id
     : "/site/" + SLUG + "/product/" + id;
 }
 function orderUrl() {
-  return isSubdomainMode ? "/order" : "/site/" + SLUG + "/order";
+  return (isSubdomainMode || !isPlatformPathMode) ? "/order" : "/site/" + SLUG + "/order";
 }
 
 let currentView = 'grid';
