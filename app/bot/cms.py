@@ -164,11 +164,13 @@ def upload_video_to_cloudinary(file_path: str, folder: str) -> str | None:
     try:
         import cloudinary.uploader
         _configure_cloudinary()
-        result = cloudinary.uploader.upload(
+        result = cloudinary.uploader.upload_large(
             file_path,
             folder=folder,
             resource_type="video",
             format="mp4",
+            chunk_size=6 * 1024 * 1024,
+            timeout=600,
             eager_async=False,
         )
         return result.get("secure_url")
