@@ -152,6 +152,26 @@ def upload_image_to_cloudinary(file_path: str, folder: str, kind: str = "product
         return None
 
 
+def upload_video_to_cloudinary(file_path: str, folder: str) -> str | None:
+    """Upload a local video file to Cloudinary. Returns secure_url or None."""
+    if not _is_cloudinary_configured():
+        return None
+    try:
+        import cloudinary.uploader
+        _configure_cloudinary()
+        result = cloudinary.uploader.upload(
+            file_path,
+            folder=folder,
+            resource_type="video",
+            format="mp4",
+            eager_async=False,
+        )
+        return result.get("secure_url")
+    except Exception as exc:
+        logger.error("Cloudinary video upload failed: %s", exc)
+        return None
+
+
 async def _download_and_upload(bot: Bot, file_id: str, folder: str, kind: str = "product") -> str | None:
     """Download a photo from Telegram and upload to Cloudinary. Returns secure_url or None."""
     if not _is_cloudinary_configured():
@@ -167,6 +187,24 @@ async def _download_and_upload(bot: Bot, file_id: str, folder: str, kind: str = 
                 os.remove(tmp)
     except Exception as exc:
         logger.error("Telegram download failed: %s", exc)
+        return None
+
+
+async def _download_and_upload_video(bot: Bot, file_id: str, folder: str) -> str | None:
+    """Download a video from Telegram and upload to Cloudinary."""
+    if not _is_cloudinary_configured():
+        return None
+    try:
+        tg_file = await bot.get_file(file_id)
+        tmp = f"/tmp/{uuid4()}.mp4"
+        try:
+            await bot.download_file(tg_file.file_path, tmp)
+            return await asyncio.to_thread(upload_video_to_cloudinary, tmp, folder=folder)
+        finally:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+    except Exception as exc:
+        logger.error("Telegram video download failed: %s", exc)
         return None
 
 
@@ -616,6 +654,9 @@ def _prod_card_kb(p: "Product", page: int = 0, site_url: str = "") -> InlineKeyb
             InlineKeyboardButton(text="📋 Характеристики", callback_data=f"cms:pe:{pid}:specs:{page}"),
         ],
         [
+            InlineKeyboardButton(text="🧩 Редагувати хар-ки", callback_data=f"cms:pshow:{pid}:{page}"),
+        ],
+        [
             InlineKeyboardButton(text="🔄 Перепарсити хар-ки", callback_data=f"cms:reparse:{pid}:{page}"),
         ],
         [
@@ -972,6 +1013,48 @@ def _specs_list_text(items: list) -> str:
     return f"Поточні характеристики:\n{lines}\n\nДодайте ще або натисніть кнопку:"
 
 
+def _spec_row_label(name: str, value: str, *, max_len: int = 48) -> str:
+    text = f"{name}: {value}"
+    return text if len(text) <= max_len else text[: max_len - 1] + "…"
+
+
+async def _rebuild_product_specs(session, product: Product) -> list[ProductSpec]:
+    specs_rows = list((await session.scalars(
+        select(ProductSpec).where(ProductSpec.product_id == product.id).order_by(ProductSpec.id)
+    )).all())
+    product.specs = _specs_text_from_list([(row.name, row.value) for row in specs_rows])
+    return specs_rows
+
+
+async def _load_product_specs(session, product_id: int) -> list[ProductSpec]:
+    return list((await session.scalars(
+        select(ProductSpec).where(ProductSpec.product_id == product_id).order_by(ProductSpec.id)
+    )).all())
+
+
+def _product_specs_kb(prod_id: int, page: int, rows: list[ProductSpec]) -> InlineKeyboardMarkup:
+    buttons: list[list[InlineKeyboardButton]] = [
+        [InlineKeyboardButton(
+            text=_spec_row_label(row.name, row.value),
+            callback_data=f"cms:psel:{prod_id}:{row.id}:{page}",
+        )]
+        for row in rows
+    ]
+    buttons.append([InlineKeyboardButton(text="➕ Додати характеристику", callback_data=f"cms:psadd:{prod_id}:{page}")])
+    buttons.append([InlineKeyboardButton(text="← До товару", callback_data=f"cms:pv:{prod_id}:{page}")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def _product_spec_actions_kb(prod_id: int, spec_id: int, page: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="✏️ Змінити значення", callback_data=f"cms:psedit:{prod_id}:{spec_id}:{page}")],
+            [InlineKeyboardButton(text="🗑 Видалити характеристику", callback_data=f"cms:psdel:{prod_id}:{spec_id}:{page}")],
+            [InlineKeyboardButton(text="← До списку характеристик", callback_data=f"cms:pshow:{prod_id}:{page}")],
+        ]
+    )
+
+
 def _site_url_for_product(product_id: int) -> str:
     from app.config import settings as app_settings
     base = (app_settings.site_url or "").rstrip("/")
@@ -998,6 +1081,7 @@ class CmsAddProduct(StatesGroup):
     price_usd      = State()
     old_price      = State()
     photos         = State()  # multi-photo collection (up to 5)
+    video          = State()  # optional video review (file or URL)
 
 
 class CmsSettings(StatesGroup):
@@ -1019,6 +1103,7 @@ class CmsSettings(StatesGroup):
 class CmsEditProduct(StatesGroup):
     edit_field = State()
     edit_image = State()
+    edit_video = State()
 
 
 class CmsProductSearch(StatesGroup):
@@ -1034,6 +1119,11 @@ class CmsFilters(StatesGroup):
     spec_list       = State()  # viewing/toggling specs for a selected category
 
 
+class CmsProductSpecs(StatesGroup):
+    edit_value = State()
+    add_value = State()
+
+
 class CmsEmojiNav(StatesGroup):
     overview    = State()  # main Групи/Категорії menu
     group_list  = State()  # browsing product groups
@@ -1044,7 +1134,7 @@ class CmsEmojiNav(StatesGroup):
 
 # ── /cancel ────────────────────────────────────────────────────────────────────
 
-@router.message(StateFilter(CmsAddProduct, CmsSettings, CmsEditProduct, CmsProductSearch, CmsProductPhotos, CmsFilters, CmsEmojiNav), Command("cancel"))
+@router.message(StateFilter(CmsAddProduct, CmsSettings, CmsEditProduct, CmsProductSearch, CmsProductPhotos, CmsFilters, CmsProductSpecs, CmsEmojiNav), Command("cancel"))
 async def cms_cancel(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer("Скасовано.", reply_markup=main_menu())
@@ -1201,6 +1291,14 @@ async def cms_prod_edit_start(cb: CallbackQuery, state: FSMContext) -> None:
         await state.set_state(CmsEditProduct.edit_image)
         await cb.message.answer(
             "🖼 Надішліть нове фото або URL зображення. «-» щоб очистити.\n"
+            "<i>/cancel для скасування</i>",
+            parse_mode="HTML",
+        )
+    elif field == "video_url":
+        await state.set_state(CmsEditProduct.edit_video)
+        await cb.message.answer(
+            "🎬 Надішліть нове відео з телефону або URL на YouTube / Instagram / TikTok / mp4.\n"
+            "«-» щоб очистити.\n"
             "<i>/cancel для скасування</i>",
             parse_mode="HTML",
         )
@@ -1371,6 +1469,287 @@ async def cms_prod_edit_image_url(message: Message, state: FSMContext) -> None:
         parse_mode="HTML",
         reply_markup=_prod_card_kb(fresh, page, site_url),
     )
+
+
+@router.message(StateFilter(CmsEditProduct.edit_video), F.video)
+async def cms_prod_edit_video_file(message: Message, state: FSMContext) -> None:
+    from app.config import settings as app_settings
+
+    if not _is_cloudinary_configured():
+        await message.answer(
+            "📹 Cloudinary не налаштований.\n"
+            "Надішліть URL відео або введіть «-» щоб очистити:",
+        )
+        return
+
+    data = await state.get_data()
+    prod_id: int = data["edit_prod_id"]
+    page: int = data.get("edit_prod_page", 0)
+    folder = f"{app_settings.cloudinary_folder}/videos"
+    url = await _download_and_upload_video(message.bot, message.video.file_id, folder=folder)
+    if not url:
+        await message.answer(
+            "⚠️ Не вдалося завантажити відео. Спробуйте URL або введіть «-» щоб очистити:",
+        )
+        return
+
+    async with AsyncSessionLocal() as session:
+        product = await session.get(Product, prod_id)
+        if product is None:
+            await state.clear()
+            return
+        product.video_url = url
+        product.video_source_type = "mp4"
+        await session.commit()
+        await session.refresh(product)
+        fresh = product
+
+    await state.clear()
+    site_url = _site_url_for_product(fresh.id)
+    await message.answer(
+        "✅ Відео оновлено\n\n" + _prod_card_text(fresh),
+        parse_mode="HTML",
+        reply_markup=_prod_card_kb(fresh, page, site_url),
+    )
+
+
+@router.message(StateFilter(CmsEditProduct.edit_video))
+async def cms_prod_edit_video_url(message: Message, state: FSMContext) -> None:
+    val = (message.text or "").strip()
+    data = await state.get_data()
+    prod_id: int = data["edit_prod_id"]
+    page: int = data.get("edit_prod_page", 0)
+
+    if val != "-" and val and not (val.startswith("https://") or val.startswith("http://")):
+        await message.answer("URL має починатись з https:// або http://. Або надішліть відео файлом.")
+        return
+
+    async with AsyncSessionLocal() as session:
+        product = await session.get(Product, prod_id)
+        if product is None:
+            await state.clear()
+            return
+        product.video_url = None if val == "-" else val or None
+        product.video_source_type = None if val == "-" else _detect_video_source(val)
+        await session.commit()
+        await session.refresh(product)
+        fresh = product
+
+    await state.clear()
+    site_url = _site_url_for_product(fresh.id)
+    await message.answer(
+        "✅ Відео оновлено\n\n" + _prod_card_text(fresh),
+        parse_mode="HTML",
+        reply_markup=_prod_card_kb(fresh, page, site_url),
+    )
+
+
+async def _show_product_specs_editor(message: Message, prod_id: int, page: int) -> None:
+    async with AsyncSessionLocal() as session:
+        product = await session.get(Product, prod_id)
+        if product is None:
+            await message.answer("Товар не знайдено.")
+            return
+        rows = await _load_product_specs(session, prod_id)
+
+    specs_text = (
+        "\n".join(f"• {html.escape(row.name)}: {html.escape(row.value)}" for row in rows)
+        if rows
+        else "Поки що немає збережених характеристик."
+    )
+    await message.answer(
+        f"🧩 <b>Характеристики товару #{prod_id}</b>\n\n{specs_text}\n\n"
+        "Оберіть характеристику для редагування або додайте нову:",
+        parse_mode="HTML",
+        reply_markup=_product_specs_kb(prod_id, page, rows),
+    )
+
+
+@router.callback_query(F.data.startswith("cms:pshow:"))
+async def cms_prod_specs_show(cb: CallbackQuery, state: FSMContext) -> None:
+    parts = cb.data.split(":")
+    try:
+        prod_id = int(parts[2])
+        page = int(parts[3])
+    except (IndexError, ValueError):
+        await cb.answer()
+        return
+    await state.clear()
+    await _show_product_specs_editor(cb.message, prod_id, page)
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("cms:psel:"))
+async def cms_prod_spec_pick(cb: CallbackQuery, state: FSMContext) -> None:
+    parts = cb.data.split(":")
+    try:
+        prod_id = int(parts[2])
+        spec_id = int(parts[3])
+        page = int(parts[4])
+    except (IndexError, ValueError):
+        await cb.answer()
+        return
+
+    async with AsyncSessionLocal() as session:
+        product = await session.get(Product, prod_id)
+        spec = await session.get(ProductSpec, spec_id)
+        if product is None or spec is None or spec.product_id != prod_id:
+            await cb.answer("Характеристику не знайдено", show_alert=True)
+            return
+
+    await state.clear()
+    await cb.message.answer(
+        f"🧩 <b>{html.escape(spec.name)}</b>\n"
+        f"Поточне значення: <code>{html.escape(spec.value)}</code>\n\n"
+        "Можна змінити значення або видалити характеристику.",
+        parse_mode="HTML",
+        reply_markup=_product_spec_actions_kb(prod_id, spec_id, page),
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("cms:psedit:"))
+async def cms_prod_spec_edit_start(cb: CallbackQuery, state: FSMContext) -> None:
+    parts = cb.data.split(":")
+    try:
+        prod_id = int(parts[2])
+        spec_id = int(parts[3])
+        page = int(parts[4])
+    except (IndexError, ValueError):
+        await cb.answer()
+        return
+
+    async with AsyncSessionLocal() as session:
+        spec = await session.get(ProductSpec, spec_id)
+        if spec is None or spec.product_id != prod_id:
+            await cb.answer("Характеристику не знайдено", show_alert=True)
+            return
+
+    await state.update_data(spec_edit_prod_id=prod_id, spec_edit_id=spec_id, spec_edit_page=page)
+    await state.set_state(CmsProductSpecs.edit_value)
+    await cb.message.answer(
+        f"Введіть нове значення для «{spec.name}»:\n"
+        f"Поточне: <code>{html.escape(spec.value)}</code>\n\n"
+        "<i>/cancel для скасування</i>",
+        parse_mode="HTML",
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("cms:psadd:"))
+async def cms_prod_spec_add_start(cb: CallbackQuery, state: FSMContext) -> None:
+    parts = cb.data.split(":")
+    try:
+        prod_id = int(parts[2])
+        page = int(parts[3])
+    except (IndexError, ValueError):
+        await cb.answer()
+        return
+
+    await state.update_data(spec_edit_prod_id=prod_id, spec_edit_page=page)
+    await state.set_state(CmsProductSpecs.add_value)
+    await cb.message.answer(
+        "Введіть нову характеристику у форматі:\n"
+        "<code>Назва: Значення</code>\n\n"
+        "Наприклад: <code>Пробіг: 145000 км</code>\n"
+        "<i>/cancel для скасування</i>",
+        parse_mode="HTML",
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("cms:psdel:"))
+async def cms_prod_spec_delete(cb: CallbackQuery, state: FSMContext) -> None:
+    parts = cb.data.split(":")
+    try:
+        prod_id = int(parts[2])
+        spec_id = int(parts[3])
+        page = int(parts[4])
+    except (IndexError, ValueError):
+        await cb.answer()
+        return
+
+    async with AsyncSessionLocal() as session:
+        product = await session.get(Product, prod_id)
+        spec = await session.get(ProductSpec, spec_id)
+        if product is None or spec is None or spec.product_id != prod_id:
+            await cb.answer("Характеристику не знайдено", show_alert=True)
+            return
+        await session.delete(spec)
+        await _rebuild_product_specs(session, product)
+        await session.commit()
+
+    await state.clear()
+    await _show_product_specs_editor(cb.message, prod_id, page)
+    await cb.answer("Характеристику видалено")
+
+
+@router.message(StateFilter(CmsProductSpecs.edit_value))
+async def cms_prod_spec_edit_value(message: Message, state: FSMContext) -> None:
+    val = (message.text or "").strip()
+    if not val:
+        await message.answer("Значення не може бути порожнім. Введіть нове значення:")
+        return
+
+    data = await state.get_data()
+    prod_id = data["spec_edit_prod_id"]
+    spec_id = data["spec_edit_id"]
+    page = data["spec_edit_page"]
+
+    async with AsyncSessionLocal() as session:
+        product = await session.get(Product, prod_id)
+        spec = await session.get(ProductSpec, spec_id)
+        if product is None or spec is None or spec.product_id != prod_id:
+            await state.clear()
+            await message.answer("Характеристику не знайдено.")
+            return
+        spec.value = val
+        await _rebuild_product_specs(session, product)
+        await session.commit()
+
+    await state.clear()
+    await _show_product_specs_editor(message, prod_id, page)
+
+
+@router.message(StateFilter(CmsProductSpecs.add_value))
+async def cms_prod_spec_add_value(message: Message, state: FSMContext) -> None:
+    val = (message.text or "").strip()
+    parsed = _parse_specs_text(val)
+    if len(parsed) != 1:
+        await message.answer(
+            "Не вдалося розпізнати одну характеристику.\n"
+            "Введіть у форматі <code>Назва: Значення</code>.",
+            parse_mode="HTML",
+        )
+        return
+
+    spec_name, spec_value = parsed[0]
+    data = await state.get_data()
+    prod_id = data["spec_edit_prod_id"]
+    page = data["spec_edit_page"]
+
+    async with AsyncSessionLocal() as session:
+        product = await session.get(Product, prod_id)
+        if product is None:
+            await state.clear()
+            await message.answer("Товар не знайдено.")
+            return
+        session.add(ProductSpec(product_id=prod_id, name=spec_name, value=spec_value))
+        if product.category:
+            existing = await session.scalar(
+                select(CategorySpec).where(
+                    CategorySpec.category == product.category,
+                    CategorySpec.name == spec_name,
+                )
+            )
+            if existing is None:
+                session.add(CategorySpec(category=product.category, name=spec_name))
+        await session.flush()
+        await _rebuild_product_specs(session, product)
+        await session.commit()
+
+    await state.clear()
+    await _show_product_specs_editor(message, prod_id, page)
 
 
 # ── Product: toggle availability ──────────────────────────────────────────────
@@ -2126,6 +2505,68 @@ async def _go_to_brand(msg: Message, state: FSMContext) -> None:
     await msg.answer("Крок 3 — Виберіть або введіть бренд:", reply_markup=_brands_kb(brands))
 
 
+@router.callback_query(F.data == "cms:add:cancel", StateFilter(CmsAddProduct))
+async def cms_add_cancel(cb: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await cb.message.answer("Скасовано.", reply_markup=main_menu())
+    await cb.answer()
+
+
+@router.callback_query(F.data == "cms:add:back", StateFilter(CmsAddProduct))
+async def cms_add_back(cb: CallbackQuery, state: FSMContext) -> None:
+    current = await state.get_state()
+
+    if current in {CmsAddProduct.category.state, CmsAddProduct.category_input.state}:
+        await _go_to_group(cb.message, state)
+    elif current in {CmsAddProduct.brand.state, CmsAddProduct.brand_input.state}:
+        await _go_to_category(cb.message, state)
+    elif current == CmsAddProduct.name.state:
+        await _go_to_brand(cb.message, state)
+    elif current == CmsAddProduct.description.state:
+        await state.set_state(CmsAddProduct.name)
+        await cb.message.answer("Крок 4 — Введіть модель / назву товару:", reply_markup=_back_cancel_kb())
+    elif current == CmsAddProduct.specs.state:
+        await state.set_state(CmsAddProduct.description)
+        await cb.message.answer(
+            "Крок 5 — Короткий опис товару (відображається на сторінці товару):",
+            reply_markup=_skip_kb("description"),
+        )
+    elif current == CmsAddProduct.price.state:
+        await state.set_state(CmsAddProduct.specs)
+        await cb.message.answer(
+            "Крок 6 — Характеристики товару:\n\nВставте всі характеристики одним повідомленням\n"
+            "або вводьте по одній (наприклад: Пробіг: 145000).\n"
+            "Підтримуються формати:\n"
+            "  Назва: Значення\n"
+            "  Назва > Значення\n"
+            "  К1 > В1 > К2 > В2 > ...\n"
+            "Коли закінчите — натисніть ✅ Готово.",
+            reply_markup=_specs_kb(),
+        )
+    elif current == CmsAddProduct.price_usd.state:
+        await state.set_state(CmsAddProduct.price)
+        await cb.message.answer("Крок 7 — Ціна в грн (наприклад: 374000):", reply_markup=_back_cancel_kb())
+    elif current == CmsAddProduct.old_price.state:
+        await state.set_state(CmsAddProduct.price_usd)
+        await cb.message.answer(
+            "Крок 8 — Ціна в доларах (необов'язково):",
+            reply_markup=_skip_kb("price_usd"),
+        )
+    elif current == CmsAddProduct.photos.state:
+        await state.update_data(collected_photos=[])
+        await state.set_state(CmsAddProduct.old_price)
+        await cb.message.answer(
+            "Крок 9 — Стара ціна (для відображення знижки):",
+            reply_markup=_skip_kb("old_price"),
+        )
+    elif current == CmsAddProduct.video.state:
+        await _show_photos_step(cb.message, state, reset=False)
+    else:
+        await _go_to_group(cb.message, state)
+
+    await cb.answer()
+
+
 @router.callback_query(F.data.startswith("cms:group:pick:"), StateFilter(CmsAddProduct.group))
 async def cms_group_pick(cb: CallbackQuery, state: FSMContext) -> None:
     try:
@@ -2229,14 +2670,14 @@ async def cms_brand_pick(cb: CallbackQuery, state: FSMContext) -> None:
     brand = brands[idx] if 0 <= idx < len(brands) else None
     await state.update_data(brand=brand)
     await state.set_state(CmsAddProduct.name)
-    await cb.message.answer("Крок 4 — Введіть модель / назву товару:")
+    await cb.message.answer("Крок 4 — Введіть модель / назву товару:", reply_markup=_back_cancel_kb())
     await cb.answer()
 
 
 @router.callback_query(F.data == "cms:brand:new", StateFilter(CmsAddProduct.brand))
 async def cms_brand_new(cb: CallbackQuery, state: FSMContext) -> None:
     await state.set_state(CmsAddProduct.brand_input)
-    await cb.message.answer("Введіть новий бренд:")
+    await cb.message.answer("Введіть новий бренд:", reply_markup=_back_cancel_kb())
     await cb.answer()
 
 
@@ -2244,7 +2685,7 @@ async def cms_brand_new(cb: CallbackQuery, state: FSMContext) -> None:
 async def cms_brand_skip(cb: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(brand=None)
     await state.set_state(CmsAddProduct.name)
-    await cb.message.answer("Крок 4 — Введіть модель / назву товару:")
+    await cb.message.answer("Крок 4 — Введіть модель / назву товару:", reply_markup=_back_cancel_kb())
     await cb.answer()
 
 
@@ -2415,7 +2856,10 @@ async def cms_add_price_usd(message: Message, state: FSMContext) -> None:
         if price_usd < 0:
             raise ValueError("negative")
     except (InvalidOperation, ValueError):
-        await message.answer("Некоректна ціна в USD. Введіть число (наприклад: 8500) або натисніть «Пропустити»:")
+        await message.answer(
+            "Некоректна ціна в USD. Введіть число (наприклад: 8500) або натисніть «Пропустити»:",
+            reply_markup=_skip_kb("price_usd"),
+        )
         return
     await state.update_data(price_usd=str(price_usd))
     await state.set_state(CmsAddProduct.old_price)
@@ -2437,7 +2881,10 @@ async def cms_add_old_price(message: Message, state: FSMContext) -> None:
         if old_price < 0:
             raise ValueError("negative")
     except (InvalidOperation, ValueError):
-        await message.answer("Некоректна стара ціна в грн. Введіть число (наприклад: 390000) або натисніть «Пропустити»:")
+        await message.answer(
+            "Некоректна стара ціна в грн. Введіть число (наприклад: 390000) або натисніть «Пропустити»:",
+            reply_markup=_skip_kb("old_price"),
+        )
         return
     await state.update_data(old_price=str(old_price))
     await _enter_photos_step(message, state)
@@ -2463,39 +2910,71 @@ def _get_photo_add_lock(user_id: int) -> asyncio.Lock:
 
 def _photos_progress_kb(count: int) -> InlineKeyboardMarkup:
     """Keyboard shown while collecting photos during add-product flow."""
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="✅ Готово",     callback_data="cms:photos:done"),
-            InlineKeyboardButton(text="⏭ Пропустити", callback_data="cms:photos:skip"),
-        ],
-        [
-            InlineKeyboardButton(text="⬅️ Назад", callback_data="cms:add:back"),
-            InlineKeyboardButton(text="❌ Скасувати", callback_data="cms:add:cancel"),
-        ],
-    ])
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Готово",     callback_data="cms:photos:done"),
+                InlineKeyboardButton(text="⏭ Пропустити", callback_data="cms:photos:skip"),
+            ],
+            [
+                InlineKeyboardButton(text="⬅️ Назад", callback_data="cms:add:back"),
+                InlineKeyboardButton(text="❌ Скасувати", callback_data="cms:add:cancel"),
+            ],
+        ]
+    )
+
+
+def _video_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="⏭ Пропустити", callback_data="cms:video:skip")],
+            [
+                InlineKeyboardButton(text="⬅️ Назад", callback_data="cms:add:back"),
+                InlineKeyboardButton(text="❌ Скасувати", callback_data="cms:add:cancel"),
+            ],
+        ]
+    )
+
+
+async def _show_photos_step(message: Message, state: FSMContext, *, reset: bool) -> None:
+    data = await state.get_data()
+    collected_photos = [] if reset else list(data.get("collected_photos") or [])
+    await state.update_data(collected_photos=collected_photos)
+    await state.set_state(CmsAddProduct.photos)
+    await message.answer(
+        "Крок 10 — Надішліть фото товару (до 5 штук).\n"
+        "Можна надсилати по одному.\n"
+        "Або натисніть «Пропустити»:",
+        reply_markup=_photos_progress_kb(len(collected_photos)),
+    )
 
 
 async def _enter_photos_step(message: Message, state: FSMContext) -> None:
-    await state.update_data(collected_photos=[])
-    await state.set_state(CmsAddProduct.photos)
+    await _show_photos_step(message, state, reset=True)
+
+
+async def _enter_video_step(message: Message, state: FSMContext) -> None:
+    await state.set_state(CmsAddProduct.video)
     await message.answer(
-        "Крок 9 — Надішліть фото товару (до 5 штук).\n"
-        "Можна надсилати по одному.\n"
-        "Або натисніть «Пропустити»:",
-        reply_markup=_photos_progress_kb(0),
+        "Крок 11 — Відео-огляд (необов'язково).\n"
+        "Надішліть відео прямо з телефону або вставте посилання на YouTube / Instagram / TikTok / mp4.\n"
+        "Або натисніть «Пропустити».",
+        reply_markup=_video_kb(),
     )
 
 
 @router.callback_query(F.data == "cms:photos:skip", StateFilter(CmsAddProduct.photos))
 async def cms_photos_skip(cb: CallbackQuery, state: FSMContext) -> None:
-    await state.update_data(collected_photos=[])
-    await _do_save_product(cb.message, state)
+    data = await state.get_data()
+    if not data.get("collected_photos"):
+        await state.update_data(collected_photos=[])
+    await _enter_video_step(cb.message, state)
     await cb.answer()
 
 
 @router.callback_query(F.data == "cms:photos:done", StateFilter(CmsAddProduct.photos))
 async def cms_photos_done(cb: CallbackQuery, state: FSMContext) -> None:
-    await _do_save_product(cb.message, state)
+    await _enter_video_step(cb.message, state)
     await cb.answer()
 
 
@@ -2573,14 +3052,13 @@ async def cms_add_photo_url(message: Message, state: FSMContext) -> None:
 
     val = (message.text or "").strip()
     if not val or val == "-":
-        # Empty or dash typed → skip photos, save product now
-        await _do_save_product(message, state)
+        await _enter_video_step(message, state)
         return
     if val in ("✅ Готово", "Готово", "готово"):
-        await _do_save_product(message, state)
+        await _enter_video_step(message, state)
         return
     if val in ("⏭ Пропустити", "⏭️ Пропустити", "Пропустити", "пропустити"):
-        await _do_save_product(message, state)
+        await _enter_video_step(message, state)
         return
 
     # URL provided — add with same lock-based serialisation
@@ -2602,6 +3080,56 @@ async def cms_add_photo_url(message: Message, state: FSMContext) -> None:
         f"✅ Фото {count}/{MAX_PRODUCT_PHOTOS} додано. Надішліть ще або натисніть «Готово»:",
         reply_markup=_photos_progress_kb(count),
     )
+
+
+@router.callback_query(F.data == "cms:video:skip", StateFilter(CmsAddProduct.video))
+async def cms_video_skip(cb: CallbackQuery, state: FSMContext) -> None:
+    await state.update_data(video_url=None, video_source_type=None)
+    await _do_save_product(cb.message, state)
+    await cb.answer()
+
+
+@router.message(StateFilter(CmsAddProduct.video), F.video)
+async def cms_add_video_file(message: Message, state: FSMContext) -> None:
+    from app.config import settings as app_settings
+
+    if not _is_cloudinary_configured():
+        await message.answer(
+            "📹 Cloudinary не налаштований. Надішліть посилання на відео або натисніть «Пропустити»:",
+            reply_markup=_video_kb(),
+        )
+        return
+
+    folder = f"{app_settings.cloudinary_folder}/videos"
+    url = await _download_and_upload_video(message.bot, message.video.file_id, folder=folder)
+    if not url:
+        await message.answer(
+            "⚠️ Не вдалося завантажити відео. Спробуйте ще раз або вставте посилання:",
+            reply_markup=_video_kb(),
+        )
+        return
+
+    await state.update_data(video_url=url, video_source_type="mp4")
+    await _do_save_product(message, state)
+
+
+@router.message(StateFilter(CmsAddProduct.video))
+async def cms_add_video_value(message: Message, state: FSMContext) -> None:
+    val = (message.text or "").strip()
+    if not val or val == "-" or val.lower() == "пропустити":
+        await state.update_data(video_url=None, video_source_type=None)
+        await _do_save_product(message, state)
+        return
+
+    if not (val.startswith("https://") or val.startswith("http://")):
+        await message.answer(
+            "Надішліть відео файлом або вставте коректне посилання на відео:",
+            reply_markup=_video_kb(),
+        )
+        return
+
+    await state.update_data(video_url=val, video_source_type=_detect_video_source(val))
+    await _do_save_product(message, state)
 
 
 async def _do_save_product(message: Message, state: FSMContext) -> None:
@@ -2635,6 +3163,8 @@ async def _do_save_product(message: Message, state: FSMContext) -> None:
                 price_usd=price_usd_val,
                 old_price=old_price_val,
                 image_url=main_url,
+                video_url=data.get("video_url"),
+                video_source_type=data.get("video_source_type"),
                 is_available=True,
             )
             session.add(product)
@@ -2702,9 +3232,10 @@ async def _do_save_product(message: Message, state: FSMContext) -> None:
     old_price_label = f" (знижка з {data['old_price']} грн)" if data.get("old_price") else ""
     usd_label = f"\nЦіна USD: ${data['price_usd']}" if data.get("price_usd") else ""
     photo_label = f"\nФото: {len(photos)} шт." if photos else ""
+    video_label = "\nВідео: ✅ додано" if data.get("video_url") else ""
     await message.answer(
         f"✅ Товар <b>{data['name']}</b>{brand_label} додано!{group_label}{cat_label}\n"
-        f"Ціна: {data['price']} грн{usd_label}{old_price_label}{photo_label}",
+        f"Ціна: {data['price']} грн{usd_label}{old_price_label}{photo_label}{video_label}",
         parse_mode="HTML",
         reply_markup=main_menu(),
     )
