@@ -444,9 +444,9 @@ _PROD_EDIT_PROMPTS: dict[str, str] = {
     "brand":           "🏢 Введіть новий бренд (або «-» щоб очистити):",
     "category":        "📂 Введіть нову категорію (або «-» щоб очистити):\n\nПриклад: Седан, Кросовер, Хетчбек.\nКоротко, без бренду, року та ціни.",
     "group_name":      "📁 Введіть нову групу (або «-» щоб очистити):\n\nПриклад: Легкові авто, Електромобілі, Комерційні авто.\nЦе верхній розділ каталогу, який об'єднує категорії.",
-    "price":           "💰 Введіть нову ціну (наприклад: 150):",
-    "price_usd":       "💵 Введіть ціну в доларах (наприклад: 4500) або «-» щоб очистити:",
-    "old_price":       "🏷 Введіть стару ціну (або «-» щоб очистити):",
+    "price":           "💰 Введіть нову ціну в грн (наприклад: 374000):",
+    "price_usd":       "💵 Введіть ціну в доларах USD (наприклад: 8500) або «-» щоб очистити:",
+    "old_price":       "🏷 Введіть стару ціну в грн (наприклад: 390000) або «-» щоб очистити:",
     "specs":           "📋 Введіть нові характеристики (або «-» щоб очистити):\n\nРекомендований формат:\nРік: 2021\nПробіг: 54 000 км\nПаливо: Дизель\nКоробка: Автомат\nМісто: Київ\n\nТакож підтримується формат через = або >.",
     "seo_title":       "📝 SEO Title — назва у браузері та пошукових системах.\nВведіть або «-» щоб очистити:",
     "seo_description": "📄 SEO Description — опис для пошукових систем.\nВведіть або «-» щоб очистити:",
@@ -1119,7 +1119,12 @@ async def cms_prod_edit_field_input(message: Message, state: FSMContext) -> None
                     if v < 0:
                         raise ValueError
                 except (InvalidOperation, ValueError):
-                    await message.answer("Некоректна ціна. Введіть число:")
+                    if field == "price":
+                        await message.answer("Некоректна ціна в грн. Введіть число (наприклад: 374000):")
+                    elif field == "price_usd":
+                        await message.answer("Некоректна ціна в USD. Введіть число (наприклад: 8500):")
+                    else:
+                        await message.answer("Некоректна стара ціна в грн. Введіть число (наприклад: 390000):")
                     return
                 if field == "price":
                     product.price = v
@@ -2178,7 +2183,7 @@ async def cms_add_description(message: Message, state: FSMContext) -> None:
 async def cms_skip_specs(cb: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(specs=None, specs_items=[])
     await state.set_state(CmsAddProduct.price)
-    await cb.message.answer("Крок 7 — Ціна (наприклад: 150):")
+    await cb.message.answer("Крок 7 — Ціна в грн (наприклад: 374000):")
     await cb.answer()
 
 
@@ -2189,7 +2194,7 @@ async def cms_done_specs(cb: CallbackQuery, state: FSMContext) -> None:
     specs_text = "\n".join(items) if items else None
     await state.update_data(specs=specs_text, specs_items=[])
     await state.set_state(CmsAddProduct.price)
-    await cb.message.answer("Крок 7 — Ціна (наприклад: 150):")
+    await cb.message.answer("Крок 7 — Ціна в грн (наприклад: 374000):")
     await cb.answer()
 
 
@@ -2235,18 +2240,18 @@ async def cms_add_price(message: Message, state: FSMContext) -> None:
         if price < 0:
             raise ValueError("negative price")
     except (InvalidOperation, ValueError):
-        await message.answer("Некоректна ціна. Введіть число (наприклад: 150):")
+        await message.answer("Некоректна ціна в грн. Введіть число (наприклад: 374000):")
         return
     await state.update_data(price=str(price))
     await state.set_state(CmsAddProduct.price_usd)
-    await message.answer("Крок 8 — Ціна в доларах (необов'язково):", reply_markup=_skip_kb("price_usd"))
+    await message.answer("Крок 8 — Ціна в доларах USD (необов'язково, наприклад: 8500):", reply_markup=_skip_kb("price_usd"))
 
 
 @router.callback_query(F.data == "cms:skip:price_usd", StateFilter(CmsAddProduct.price_usd))
 async def cms_skip_price_usd(cb: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(price_usd=None)
     await state.set_state(CmsAddProduct.old_price)
-    await cb.message.answer("Крок 9 — Стара ціна (для відображення знижки):", reply_markup=_skip_kb("old_price"))
+    await cb.message.answer("Крок 9 — Стара ціна в грн (для відображення знижки, наприклад: 390000):", reply_markup=_skip_kb("old_price"))
     await cb.answer()
 
 
@@ -2258,11 +2263,11 @@ async def cms_add_price_usd(message: Message, state: FSMContext) -> None:
         if price_usd < 0:
             raise ValueError("negative")
     except (InvalidOperation, ValueError):
-        await message.answer("Некоректна ціна. Введіть число або натисніть «Пропустити»:")
+        await message.answer("Некоректна ціна в USD. Введіть число (наприклад: 8500) або натисніть «Пропустити»:")
         return
     await state.update_data(price_usd=str(price_usd))
     await state.set_state(CmsAddProduct.old_price)
-    await message.answer("Крок 9 — Стара ціна (для відображення знижки):", reply_markup=_skip_kb("old_price"))
+    await message.answer("Крок 9 — Стара ціна в грн (для відображення знижки, наприклад: 390000):", reply_markup=_skip_kb("old_price"))
 
 
 @router.callback_query(F.data == "cms:skip:old_price", StateFilter(CmsAddProduct.old_price))
@@ -2280,7 +2285,7 @@ async def cms_add_old_price(message: Message, state: FSMContext) -> None:
         if old_price < 0:
             raise ValueError("negative")
     except (InvalidOperation, ValueError):
-        await message.answer("Некоректна ціна. Введіть число або натисніть «Пропустити»:")
+        await message.answer("Некоректна стара ціна в грн. Введіть число (наприклад: 390000) або натисніть «Пропустити»:")
         return
     await state.update_data(old_price=str(old_price))
     await _enter_photos_step(message, state)
