@@ -13,8 +13,10 @@ import asyncio
 import html
 import logging
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
+from urllib.parse import urlparse
 from uuid import uuid4
 
 from aiogram import Bot, F, Router
@@ -209,6 +211,58 @@ async def _download_and_upload_video(bot: Bot, file_id: str, folder: str) -> str
     except Exception as exc:
         logger.error("Telegram video download failed: %s", exc)
         return None
+
+
+def _cloudinary_public_id_from_url(url: str | None) -> str | None:
+    """Extract Cloudinary public_id from a secure URL.
+
+    Supports typical URLs like:
+      https://res.cloudinary.com/<cloud>/image/upload/v123/folder/name.jpg
+      https://res.cloudinary.com/<cloud>/video/upload/c_fill,q_auto/v123/folder/name.mp4
+    """
+    if not url or "res.cloudinary.com" not in url:
+        return None
+
+    parsed = urlparse(url)
+    path = parsed.path or ""
+    marker = "/upload/"
+    if marker not in path:
+        return None
+
+    tail = path.split(marker, 1)[1].lstrip("/")
+    # Drop optional transformation segments until version or asset path.
+    if re.match(r"^v\d+/", tail):
+        asset_path = tail.split("/", 1)[1] if "/" in tail else ""
+    else:
+        parts = tail.split("/")
+        version_idx = next((i for i, part in enumerate(parts) if re.fullmatch(r"v\d+", part)), None)
+        if version_idx is not None:
+            asset_path = "/".join(parts[version_idx + 1 :])
+        else:
+            asset_path = tail
+
+    if not asset_path:
+        return None
+
+    # Remove extension from final segment.
+    if "." in asset_path.rsplit("/", 1)[-1]:
+        asset_path = asset_path.rsplit(".", 1)[0]
+    return asset_path or None
+
+
+def _delete_cloudinary_asset(url: str | None, *, resource_type: str) -> bool:
+    """Delete a Cloudinary asset by URL when possible."""
+    public_id = _cloudinary_public_id_from_url(url)
+    if not public_id or not _is_cloudinary_configured():
+        return False
+    try:
+        import cloudinary.uploader
+        _configure_cloudinary()
+        result = cloudinary.uploader.destroy(public_id, resource_type=resource_type, invalidate=True)
+        return result.get("result") in {"ok", "not found"}
+    except Exception as exc:
+        logger.warning("Cloudinary delete failed for %s (%s): %s", public_id, resource_type, exc)
+        return False
 
 
 def _video_limit_error(video) -> str | None:
@@ -1460,10 +1514,14 @@ async def cms_prod_edit_photo(message: Message, state: FSMContext) -> None:
         if product is None:
             await state.clear()
             return
+        old_image_url = product.image_url
         product.image_url = url
         await session.commit()
         await session.refresh(product)
         fresh = product
+
+    if old_image_url and old_image_url != url:
+        await asyncio.to_thread(_delete_cloudinary_asset, old_image_url, resource_type="image")
     await state.clear()
     site_url = _site_url_for_product(fresh.id)
     await message.answer(
@@ -1484,10 +1542,14 @@ async def cms_prod_edit_image_url(message: Message, state: FSMContext) -> None:
         if product is None:
             await state.clear()
             return
+        old_image_url = product.image_url
         product.image_url = None if val == "-" else val or None
         await session.commit()
         await session.refresh(product)
         fresh = product
+
+    if val == "-" and old_image_url:
+        await asyncio.to_thread(_delete_cloudinary_asset, old_image_url, resource_type="image")
     await state.clear()
     site_url = _site_url_for_product(fresh.id)
     await message.answer(
@@ -1529,11 +1591,15 @@ async def cms_prod_edit_video_file(message: Message, state: FSMContext) -> None:
         if product is None:
             await state.clear()
             return
+        old_video_url = product.video_url
         product.video_url = url
         product.video_source_type = "mp4"
         await session.commit()
         await session.refresh(product)
         fresh = product
+
+    if old_video_url and old_video_url != url:
+        await asyncio.to_thread(_delete_cloudinary_asset, old_video_url, resource_type="video")
 
     await state.clear()
     site_url = _site_url_for_product(fresh.id)
@@ -1560,11 +1626,15 @@ async def cms_prod_edit_video_url(message: Message, state: FSMContext) -> None:
         if product is None:
             await state.clear()
             return
+        old_video_url = product.video_url
         product.video_url = None if val == "-" else val or None
         product.video_source_type = None if val == "-" else _detect_video_source(val)
         await session.commit()
         await session.refresh(product)
         fresh = product
+
+    if val == "-" and old_video_url:
+        await asyncio.to_thread(_delete_cloudinary_asset, old_video_url, resource_type="video")
 
     await state.clear()
     site_url = _site_url_for_product(fresh.id)
@@ -1856,8 +1926,19 @@ async def cms_prod_del_do(cb: CallbackQuery, state: FSMContext) -> None:
             await cb.answer("Товар не знайдено", show_alert=True)
             return
         prod_name = product.name
+        image_urls = [product.image_url] if product.image_url else []
+        video_url = product.video_url
+        gallery_urls = list((await session.scalars(
+            select(ProductImage.image_url).where(ProductImage.product_id == prod_id)
+        )).all())
         await session.delete(product)
         await session.commit()
+
+    for url in {u for u in image_urls + gallery_urls if u}:
+        await asyncio.to_thread(_delete_cloudinary_asset, url, resource_type="image")
+    if video_url:
+        await asyncio.to_thread(_delete_cloudinary_asset, video_url, resource_type="video")
+
     shop = await _get_shop()
     prods, page, total_pages = await _prod_page_data(page)
     await cb.message.edit_text(
@@ -3478,6 +3559,7 @@ async def cms_ph_delete(cb: CallbackQuery, state: FSMContext) -> None:
             await cb.answer("Фото не знайдено", show_alert=True)
             return
         was_main = img.is_main
+        deleted_url = img.image_url
         await session.delete(img)
         await session.flush()
         # Re-number sort_order
@@ -3491,6 +3573,9 @@ async def cms_ph_delete(cb: CallbackQuery, state: FSMContext) -> None:
             remaining[0].is_main = True
         await _sync_main_image(session, prod_id)
         await session.commit()
+
+    if deleted_url:
+        await asyncio.to_thread(_delete_cloudinary_asset, deleted_url, resource_type="image")
 
     await cb.answer("🗑 Фото видалено")
     cb.data = f"cms:pgallery:{prod_id}:{page}"
