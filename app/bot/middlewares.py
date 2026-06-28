@@ -11,6 +11,7 @@ from aiogram.types import Message, TelegramObject
 from app.bot.keyboards import (
     BTN_CMS_ADMINS,
     BTN_CMS_FILTERS,
+    BTN_CMS_HELP,
     BTN_CMS_ORDERS,
     BTN_CMS_PRODUCTS,
     BTN_CMS_SETTINGS,
@@ -28,6 +29,7 @@ MENU_BUTTONS: Set[str] = {
     BTN_CMS_STATS,
     BTN_CMS_FILTERS,
     BTN_CMS_ADMINS,
+    BTN_CMS_HELP,
 }
 
 

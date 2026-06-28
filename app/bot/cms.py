@@ -670,6 +670,7 @@ def _groups_kb(groups: list[str]) -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="✏️ Нова група", callback_data="cms:group:new"),
         InlineKeyboardButton(text="⏭ Пропустити", callback_data="cms:group:skip"),
     ])
+    rows.append([InlineKeyboardButton(text="❌ Скасувати", callback_data="cms:add:cancel")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -679,6 +680,10 @@ def _categories_kb(cats: list[str]) -> InlineKeyboardMarkup:
         for i, c in enumerate(cats)
     ]
     rows.append([InlineKeyboardButton(text="✏️ Нова категорія", callback_data="cms:cat:new")])
+    rows.append([
+        InlineKeyboardButton(text="⬅️ Назад", callback_data="cms:add:back"),
+        InlineKeyboardButton(text="❌ Скасувати", callback_data="cms:add:cancel"),
+    ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -691,20 +696,45 @@ def _brands_kb(brands: list[str]) -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="✏️ Новий бренд", callback_data="cms:brand:new"),
         InlineKeyboardButton(text="⏭ Пропустити", callback_data="cms:brand:skip"),
     ])
+    rows.append([
+        InlineKeyboardButton(text="⬅️ Назад", callback_data="cms:add:back"),
+        InlineKeyboardButton(text="❌ Скасувати", callback_data="cms:add:cancel"),
+    ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def _skip_kb(field: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="⏭ Пропустити", callback_data=f"cms:skip:{field}")]]
+        inline_keyboard=[
+            [InlineKeyboardButton(text="⏭ Пропустити", callback_data=f"cms:skip:{field}")],
+            [
+                InlineKeyboardButton(text="⬅️ Назад", callback_data="cms:add:back"),
+                InlineKeyboardButton(text="❌ Скасувати", callback_data="cms:add:cancel"),
+            ],
+        ]
     )
 
 
 def _specs_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Готово",     callback_data="cms:done:specs"),
+                InlineKeyboardButton(text="⏭ Пропустити", callback_data="cms:skip:specs"),
+            ],
+            [
+                InlineKeyboardButton(text="⬅️ Назад", callback_data="cms:add:back"),
+                InlineKeyboardButton(text="❌ Скасувати", callback_data="cms:add:cancel"),
+            ],
+        ]
+    )
+
+
+def _back_cancel_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
         inline_keyboard=[[
-            InlineKeyboardButton(text="✅ Готово",     callback_data="cms:done:specs"),
-            InlineKeyboardButton(text="⏭ Пропустити", callback_data="cms:skip:specs"),
+            InlineKeyboardButton(text="⬅️ Назад", callback_data="cms:add:back"),
+            InlineKeyboardButton(text="❌ Скасувати", callback_data="cms:add:cancel"),
         ]]
     )
 
@@ -1018,6 +1048,73 @@ class CmsEmojiNav(StatesGroup):
 async def cms_cancel(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer("Скасовано.", reply_markup=main_menu())
+
+
+@router.callback_query(F.data == "cms:add:cancel", StateFilter(CmsAddProduct))
+async def cms_add_cancel(cb: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    await cb.message.answer("Скасовано.", reply_markup=main_menu())
+    await cb.answer()
+
+
+@router.callback_query(F.data == "cms:add:back", StateFilter(CmsAddProduct))
+async def cms_add_back(cb: CallbackQuery, state: FSMContext) -> None:
+    current = await state.get_state()
+    if current in {CmsAddProduct.category.state, CmsAddProduct.category_input.state}:
+        await _go_to_group(cb.message, state)
+    elif current in {CmsAddProduct.brand.state, CmsAddProduct.brand_input.state}:
+        await _go_to_category(cb.message, state)
+    elif current == CmsAddProduct.name.state:
+        await _go_to_brand(cb.message, state)
+    elif current == CmsAddProduct.description.state:
+        await state.set_state(CmsAddProduct.name)
+        await cb.message.answer("Крок 4 — Введіть модель / назву товару:", reply_markup=_back_cancel_kb())
+    elif current == CmsAddProduct.specs.state:
+        await state.set_state(CmsAddProduct.description)
+        await cb.message.answer(
+            "Крок 5 — Короткий опис товару (відображається на сторінці товару):",
+            reply_markup=_skip_kb("description"),
+        )
+    elif current == CmsAddProduct.price.state:
+        await state.set_state(CmsAddProduct.specs)
+        await cb.message.answer(
+            "Крок 6 — Характеристики товару:\n\nВставте всі характеристики одним повідомленням\n"
+            "або вводьте по одній.\n"
+            "Найкраще працює формат «Назва: Значення».\n\n"
+            "Рекомендовані ключі для авто:\n"
+            "  Рік: 2021\n"
+            "  Пробіг: 54 000 км\n"
+            "  Паливо: Дизель\n"
+            "  Коробка: Автомат\n"
+            "  Місто: Київ\n"
+            "  Тип кузова: Седан\n"
+            "Підтримуються формати:\n"
+            "  Назва: Значення\n"
+            "  Назва = Значення\n"
+            "  Назва > Значення\n"
+            "  К1 > В1 > К2 > В2 > ...\n"
+            "Коли закінчите — натисніть ✅ Готово.",
+            reply_markup=_specs_kb(),
+        )
+    elif current == CmsAddProduct.price_usd.state:
+        await state.set_state(CmsAddProduct.price)
+        await cb.message.answer("Крок 7 — Ціна в грн (наприклад: 374000):", reply_markup=_back_cancel_kb())
+    elif current == CmsAddProduct.old_price.state:
+        await state.set_state(CmsAddProduct.price_usd)
+        await cb.message.answer(
+            "Крок 8 — Ціна в доларах USD (необов'язково, наприклад: 8500):",
+            reply_markup=_skip_kb("price_usd"),
+        )
+    elif current == CmsAddProduct.photos.state:
+        await state.update_data(collected_photos=[])
+        await state.set_state(CmsAddProduct.old_price)
+        await cb.message.answer(
+            "Крок 9 — Стара ціна в грн (для відображення знижки, наприклад: 390000):",
+            reply_markup=_skip_kb("old_price"),
+        )
+    else:
+        await _go_to_group(cb.message, state)
+    await cb.answer()
 
 
 # ── 📦 Товари (paginated) ──────────────────────────────────────────────────────
@@ -1974,6 +2071,11 @@ async def cms_bg_url_input(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(F.data == "cms:prod:add")
 async def cms_start_add(cb: CallbackQuery, state: FSMContext) -> None:
+    await _go_to_group(cb.message, state)
+    await cb.answer()
+
+
+async def _go_to_group(msg: Message, state: FSMContext) -> None:
     async with AsyncSessionLocal() as session:
         groups = list(await session.scalars(
             select(Product.group_name)
@@ -1983,7 +2085,7 @@ async def cms_start_add(cb: CallbackQuery, state: FSMContext) -> None:
         ))
     await state.update_data(possible_groups=groups)
     await state.set_state(CmsAddProduct.group)
-    await cb.message.answer(
+    await msg.answer(
         "📦 <b>Новий товар</b>\n\n"
         "Крок 1 — Виберіть або введіть групу товарів:\n"
         "Група = великий розділ каталогу.\n"
@@ -1992,7 +2094,6 @@ async def cms_start_add(cb: CallbackQuery, state: FSMContext) -> None:
         parse_mode="HTML",
         reply_markup=_groups_kb(groups),
     )
-    await cb.answer()
 
 
 async def _go_to_category(msg: Message, state: FSMContext) -> None:
@@ -2048,6 +2149,7 @@ async def cms_group_new(cb: CallbackQuery, state: FSMContext) -> None:
         "Група = великий розділ каталогу.\n"
         "Приклади: Легкові авто, Електромобілі, Комерційні авто.\n"
         "Пишіть коротко, без бренду, ціни та року.",
+        reply_markup=_back_cancel_kb(),
     )
     await cb.answer()
 
@@ -2096,6 +2198,7 @@ async def cms_cat_new(cb: CallbackQuery, state: FSMContext) -> None:
         "Категорія = підтип всередині групи.\n"
         "Приклади: Седан, Кросовер, Хетчбек, Купе.\n"
         "Пишіть коротко, без бренду та технічних характеристик.",
+        reply_markup=_back_cancel_kb(),
     )
     await cb.answer()
 
@@ -2150,7 +2253,7 @@ async def cms_brand_typed(message: Message, state: FSMContext) -> None:
     brand = (message.text or "").strip()
     await state.update_data(brand=brand or None)
     await state.set_state(CmsAddProduct.name)
-    await message.answer("Крок 4 — Введіть модель / назву товару:")
+    await message.answer("Крок 4 — Введіть модель / назву товару:", reply_markup=_back_cancel_kb())
 
 
 @router.message(StateFilter(CmsAddProduct.brand_input))
@@ -2158,14 +2261,14 @@ async def cms_brand_input(message: Message, state: FSMContext) -> None:
     brand = (message.text or "").strip()
     await state.update_data(brand=brand or None)
     await state.set_state(CmsAddProduct.name)
-    await message.answer("Крок 4 — Введіть модель / назву товару:")
+    await message.answer("Крок 4 — Введіть модель / назву товару:", reply_markup=_back_cancel_kb())
 
 
 @router.message(StateFilter(CmsAddProduct.name))
 async def cms_add_name(message: Message, state: FSMContext) -> None:
     text = (message.text or "").strip()
     if not text:
-        await message.answer("Назва не може бути порожньою. Введіть назву:")
+        await message.answer("Назва не може бути порожньою. Введіть назву:", reply_markup=_back_cancel_kb())
         return
     await state.update_data(name=text, specs_items=[])
     await state.set_state(CmsAddProduct.description)
@@ -2232,7 +2335,7 @@ async def cms_add_description(message: Message, state: FSMContext) -> None:
 async def cms_skip_specs(cb: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(specs=None, specs_items=[])
     await state.set_state(CmsAddProduct.price)
-    await cb.message.answer("Крок 7 — Ціна в грн (наприклад: 374000):")
+    await cb.message.answer("Крок 7 — Ціна в грн (наприклад: 374000):", reply_markup=_back_cancel_kb())
     await cb.answer()
 
 
@@ -2243,7 +2346,7 @@ async def cms_done_specs(cb: CallbackQuery, state: FSMContext) -> None:
     specs_text = "\n".join(items) if items else None
     await state.update_data(specs=specs_text, specs_items=[])
     await state.set_state(CmsAddProduct.price)
-    await cb.message.answer("Крок 7 — Ціна в грн (наприклад: 374000):")
+    await cb.message.answer("Крок 7 — Ціна в грн (наприклад: 374000):", reply_markup=_back_cancel_kb())
     await cb.answer()
 
 
@@ -2289,7 +2392,7 @@ async def cms_add_price(message: Message, state: FSMContext) -> None:
         if price < 0:
             raise ValueError("negative price")
     except (InvalidOperation, ValueError):
-        await message.answer("Некоректна ціна в грн. Введіть число (наприклад: 374000):")
+        await message.answer("Некоректна ціна в грн. Введіть число (наприклад: 374000):", reply_markup=_back_cancel_kb())
         return
     await state.update_data(price=str(price))
     await state.set_state(CmsAddProduct.price_usd)
@@ -2360,10 +2463,16 @@ def _get_photo_add_lock(user_id: int) -> asyncio.Lock:
 
 def _photos_progress_kb(count: int) -> InlineKeyboardMarkup:
     """Keyboard shown while collecting photos during add-product flow."""
-    return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="✅ Готово",     callback_data="cms:photos:done"),
-        InlineKeyboardButton(text="⏭ Пропустити", callback_data="cms:photos:skip"),
-    ]])
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ Готово",     callback_data="cms:photos:done"),
+            InlineKeyboardButton(text="⏭ Пропустити", callback_data="cms:photos:skip"),
+        ],
+        [
+            InlineKeyboardButton(text="⬅️ Назад", callback_data="cms:add:back"),
+            InlineKeyboardButton(text="❌ Скасувати", callback_data="cms:add:cancel"),
+        ],
+    ])
 
 
 async def _enter_photos_step(message: Message, state: FSMContext) -> None:
