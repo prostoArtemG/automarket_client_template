@@ -55,7 +55,7 @@ router = Router(name="cms")
 router.message.filter(AdminFilter())
 router.callback_query.filter(AdminFilter())
 
-MAX_TG_VIDEO_BYTES = 45 * 1024 * 1024
+MAX_TG_VIDEO_BYTES = 100 * 1024 * 1024
 MAX_TG_VIDEO_DURATION_SEC = 180
 
 
@@ -836,6 +836,30 @@ def _skip_kb(field: str) -> InlineKeyboardMarkup:
     )
 
 
+def _price_skip_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="⏭ Пропустити (0 грн)", callback_data="cms:skip:price")],
+            [
+                InlineKeyboardButton(text="⬅️ Назад", callback_data="cms:add:back"),
+                InlineKeyboardButton(text="❌ Скасувати", callback_data="cms:add:cancel"),
+            ],
+        ]
+    )
+
+
+def _old_price_skip_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="⏭ Пропустити стару ціну", callback_data="cms:skip:old_price")],
+            [
+                InlineKeyboardButton(text="⬅️ Назад", callback_data="cms:add:back"),
+                InlineKeyboardButton(text="❌ Скасувати", callback_data="cms:add:cancel"),
+            ],
+        ]
+    )
+
+
 def _specs_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -1268,7 +1292,11 @@ async def cms_add_back(cb: CallbackQuery, state: FSMContext) -> None:
         )
     elif current == CmsAddProduct.price_usd.state:
         await state.set_state(CmsAddProduct.price)
-        await cb.message.answer("Крок 7 — Ціна в грн (наприклад: 374000):", reply_markup=_back_cancel_kb())
+        await cb.message.answer(
+            "Крок 7 — Ціна в грн (наприклад: 374000).\n"
+            "Або натисніть «Пропустити (0 грн)»:",
+            reply_markup=_price_skip_kb(),
+        )
     elif current == CmsAddProduct.old_price.state:
         await state.set_state(CmsAddProduct.price_usd)
         await cb.message.answer(
@@ -1280,7 +1308,7 @@ async def cms_add_back(cb: CallbackQuery, state: FSMContext) -> None:
         await state.set_state(CmsAddProduct.old_price)
         await cb.message.answer(
             "Крок 9 — Стара ціна в грн (для відображення знижки, наприклад: 390000):",
-            reply_markup=_skip_kb("old_price"),
+            reply_markup=_old_price_skip_kb(),
         )
     else:
         await _go_to_group(cb.message, state)
@@ -2657,7 +2685,11 @@ async def cms_add_back(cb: CallbackQuery, state: FSMContext) -> None:
         )
     elif current == CmsAddProduct.price_usd.state:
         await state.set_state(CmsAddProduct.price)
-        await cb.message.answer("Крок 7 — Ціна в грн (наприклад: 374000):", reply_markup=_back_cancel_kb())
+        await cb.message.answer(
+            "Крок 7 — Ціна в грн (наприклад: 374000).\n"
+            "Або натисніть «Пропустити (0 грн)»:",
+            reply_markup=_price_skip_kb(),
+        )
     elif current == CmsAddProduct.old_price.state:
         await state.set_state(CmsAddProduct.price_usd)
         await cb.message.answer(
@@ -2669,7 +2701,7 @@ async def cms_add_back(cb: CallbackQuery, state: FSMContext) -> None:
         await state.set_state(CmsAddProduct.old_price)
         await cb.message.answer(
             "Крок 9 — Стара ціна (для відображення знижки):",
-            reply_markup=_skip_kb("old_price"),
+            reply_markup=_old_price_skip_kb(),
         )
     elif current == CmsAddProduct.video.state:
         await _show_photos_step(cb.message, state, reset=False)
@@ -2888,7 +2920,11 @@ async def cms_add_description(message: Message, state: FSMContext) -> None:
 async def cms_skip_specs(cb: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(specs=None, specs_items=[])
     await state.set_state(CmsAddProduct.price)
-    await cb.message.answer("Крок 7 — Ціна в грн (наприклад: 374000):", reply_markup=_back_cancel_kb())
+    await cb.message.answer(
+        "Крок 7 — Ціна в грн (наприклад: 374000).\n"
+        "Або натисніть «Пропустити (0 грн)»:",
+        reply_markup=_price_skip_kb(),
+    )
     await cb.answer()
 
 
@@ -2899,7 +2935,11 @@ async def cms_done_specs(cb: CallbackQuery, state: FSMContext) -> None:
     specs_text = "\n".join(items) if items else None
     await state.update_data(specs=specs_text, specs_items=[])
     await state.set_state(CmsAddProduct.price)
-    await cb.message.answer("Крок 7 — Ціна в грн (наприклад: 374000):", reply_markup=_back_cancel_kb())
+    await cb.message.answer(
+        "Крок 7 — Ціна в грн (наприклад: 374000).\n"
+        "Або натисніть «Пропустити (0 грн)»:",
+        reply_markup=_price_skip_kb(),
+    )
     await cb.answer()
 
 
@@ -2945,18 +2985,36 @@ async def cms_add_price(message: Message, state: FSMContext) -> None:
         if price < 0:
             raise ValueError("negative price")
     except (InvalidOperation, ValueError):
-        await message.answer("Некоректна ціна в грн. Введіть число (наприклад: 374000):", reply_markup=_back_cancel_kb())
+        await message.answer(
+            "Некоректна ціна в грн. Введіть число (наприклад: 374000) "
+            "або натисніть «Пропустити (0 грн)»:",
+            reply_markup=_price_skip_kb(),
+        )
         return
     await state.update_data(price=str(price))
     await state.set_state(CmsAddProduct.price_usd)
     await message.answer("Крок 8 — Ціна в доларах USD (необов'язково, наприклад: 8500):", reply_markup=_skip_kb("price_usd"))
 
 
+@router.callback_query(F.data == "cms:skip:price", StateFilter(CmsAddProduct.price))
+async def cms_skip_price(cb: CallbackQuery, state: FSMContext) -> None:
+    await state.update_data(price="0")
+    await state.set_state(CmsAddProduct.price_usd)
+    await cb.message.answer(
+        "Крок 8 — Ціна в доларах USD (необов'язково, наприклад: 8500):",
+        reply_markup=_skip_kb("price_usd"),
+    )
+    await cb.answer()
+
+
 @router.callback_query(F.data == "cms:skip:price_usd", StateFilter(CmsAddProduct.price_usd))
 async def cms_skip_price_usd(cb: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(price_usd=None)
     await state.set_state(CmsAddProduct.old_price)
-    await cb.message.answer("Крок 9 — Стара ціна в грн (для відображення знижки, наприклад: 390000):", reply_markup=_skip_kb("old_price"))
+    await cb.message.answer(
+        "Крок 9 — Стара ціна в грн (для відображення знижки, наприклад: 390000):",
+        reply_markup=_old_price_skip_kb(),
+    )
     await cb.answer()
 
 
@@ -2975,7 +3033,10 @@ async def cms_add_price_usd(message: Message, state: FSMContext) -> None:
         return
     await state.update_data(price_usd=str(price_usd))
     await state.set_state(CmsAddProduct.old_price)
-    await message.answer("Крок 9 — Стара ціна в грн (для відображення знижки, наприклад: 390000):", reply_markup=_skip_kb("old_price"))
+    await message.answer(
+        "Крок 9 — Стара ціна в грн (для відображення знижки, наприклад: 390000):",
+        reply_markup=_old_price_skip_kb(),
+    )
 
 
 @router.callback_query(F.data == "cms:skip:old_price", StateFilter(CmsAddProduct.old_price))
@@ -2995,7 +3056,7 @@ async def cms_add_old_price(message: Message, state: FSMContext) -> None:
     except (InvalidOperation, ValueError):
         await message.answer(
             "Некоректна стара ціна в грн. Введіть число (наприклад: 390000) або натисніть «Пропустити»:",
-            reply_markup=_skip_kb("old_price"),
+            reply_markup=_old_price_skip_kb(),
         )
         return
     await state.update_data(old_price=str(old_price))
