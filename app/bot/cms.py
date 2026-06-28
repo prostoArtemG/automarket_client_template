@@ -34,6 +34,7 @@ from app.bot.keyboards import (
     BTN_CMS_ADMINS,
     BTN_CMS_EMOJI,
     BTN_CMS_FILTERS,
+    BTN_CMS_HELP,
     BTN_CMS_ORDERS,
     BTN_CMS_PRODUCTS,
     BTN_CMS_SETTINGS,
@@ -54,6 +55,40 @@ router.callback_query.filter(AdminFilter())
 
 
 # ── Shop helpers ───────────────────────────────────────────────────────────────
+
+_CMS_HELP_TEXT = (
+    "📘 <b>Інструкція для заповнення авто</b>\n\n"
+    "<b>1. Група товарів</b>\n"
+    "Це великий розділ каталогу.\n"
+    "Приклади: <code>Легкові авто</code>, <code>Електромобілі</code>, <code>Комерційні авто</code>.\n\n"
+    "<b>2. Категорія</b>\n"
+    "Це тип авто всередині групи.\n"
+    "Приклади: <code>Седан</code>, <code>Кросовер</code>, <code>Хетчбек</code>, <code>Універсал</code>.\n\n"
+    "<b>3. Бренд</b>\n"
+    "Приклади: <code>Audi</code>, <code>BMW</code>, <code>Mercedes-Benz</code>.\n\n"
+    "<b>4. Назва / модель</b>\n"
+    "Коротко: <code>A1</code>, <code>Octavia A7</code>, <code>E 220d AMG Line</code>.\n\n"
+    "<b>5. Характеристики</b>\n"
+    "Найкраще працює формат <code>Назва: Значення</code>.\n"
+    "Також підтримується <code>Назва = Значення</code> або <code>Назва &gt; Значення</code>.\n\n"
+    "<b>Рекомендований шаблон:</b>\n"
+    "<code>Рік: 2021\n"
+    "Пробіг: 54 000 км\n"
+    "Паливо: Дизель\n"
+    "Коробка: Автомат\n"
+    "Місто: Київ\n"
+    "Тип кузова: Седан</code>\n\n"
+    "<b>6. Ціна</b>\n"
+    "Крок 7: ціна в <b>грн</b>.\n"
+    "Приклад: <code>374000</code>\n\n"
+    "Крок 8: ціна в <b>USD</b>.\n"
+    "Приклад: <code>8500</code>\n\n"
+    "Крок 9: стара ціна теж у <b>грн</b>.\n"
+    "Приклад: <code>390000</code>\n\n"
+    "<b>Порада</b>\n"
+    "Для красивих іконок на сайті краще використовувати саме ці ключі:\n"
+    "<code>Рік</code>, <code>Пробіг</code>, <code>Паливо</code>, <code>Коробка</code>, <code>Місто</code>, <code>Тип кузова</code>."
+)
 
 async def _get_shop() -> ShopSettings:
     """Return ShopSettings(id=1), creating it if missing."""
@@ -1584,6 +1619,18 @@ async def cms_site(message: Message, state: FSMContext) -> None:
     await message.answer(
         f"🌐 <b>Ваш сайт:</b>\n<code>{site_url}</code>\n\n"
         f"<i>Налаштуйте SITE_URL у змінних середовища Railway.</i>",
+        parse_mode="HTML",
+        reply_markup=main_menu(),
+    )
+
+
+# ── 📘 Інструкція ──────────────────────────────────────────────────────────────
+
+@router.message(F.text == BTN_CMS_HELP)
+async def cms_help(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer(
+        _CMS_HELP_TEXT,
         parse_mode="HTML",
         reply_markup=main_menu(),
     )
