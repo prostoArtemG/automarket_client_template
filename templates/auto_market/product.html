@@ -83,6 +83,36 @@
     }
     .product-img-main img { width: 100%; height: 100%; object-fit: cover; }
     .product-img-placeholder { font-size: 96px; color: var(--muted); }
+    .gallery-thumbs {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+      gap: 10px;
+      padding: 14px;
+      background: rgba(255,255,255,0.02);
+      border-top: 1px solid var(--border);
+    }
+    .gallery-thumb {
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--bg);
+      aspect-ratio: 4 / 3;
+      padding: 0;
+      transition: border-color .2s, transform .15s, box-shadow .2s;
+    }
+    .gallery-thumb:hover {
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+    .gallery-thumb.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(232,160,32,.18);
+    }
+    .gallery-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
     .gallery-badge {
       position: absolute; top: 14px; left: 14px;
       display: flex; flex-direction: column; gap: 6px;
@@ -266,6 +296,11 @@
       .form-grid { grid-template-columns: 1fr; }
       .key-specs { grid-template-columns: repeat(2, 1fr); }
       .cta-row { gap: 8px; }
+      .gallery-thumbs {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        padding: 10px;
+      }
     }
   </style>
 </head>
@@ -305,13 +340,31 @@
 
     <!-- GALLERY -->
     <div class="product-gallery">
+      {% set gallery_images = product.images if product.images else [] %}
+      {% set main_photo = (gallery_images | selectattr('is_main') | list | first) or (gallery_images | first) %}
       <div class="product-img-main">
-        {% if product.image_url %}
+        {% if main_photo %}
+          <img src="{{ main_photo.url }}" alt="{{ product.brand or '' }} {{ product.name }}" id="mainImg">
+        {% elif product.image_url %}
           <img src="{{ product.image_url }}" alt="{{ product.brand or '' }} {{ product.name }}" id="mainImg">
         {% else %}
           <div class="product-img-placeholder">&#x1F697;</div>
         {% endif %}
       </div>
+      {% if gallery_images|length > 1 %}
+      <div class="gallery-thumbs">
+        {% for image in gallery_images %}
+        <button
+          type="button"
+          class="gallery-thumb{% if main_photo and image.url == main_photo.url %} active{% endif %}"
+          data-gallery-thumb
+          data-image-url="{{ image.url }}"
+          aria-label="Фото {{ loop.index }}">
+          <img src="{{ image.url }}" alt="{{ product.brand or '' }} {{ product.name }} — фото {{ loop.index }}">
+        </button>
+        {% endfor %}
+      </div>
+      {% endif %}
       <div class="gallery-badge">
         {% if not product.is_available %}
           <span class="badge-unavail">Продано</span>
@@ -601,6 +654,19 @@ function orderUrl() {
 }
 const PRODUCT_NAME = {{ ((product.brand or '') + ' ' + product.name) | tojson }};
 const PRODUCT_PRICE = {{ product.price }};
+const mainImg = document.getElementById('mainImg');
+const galleryThumbs = Array.from(document.querySelectorAll('[data-gallery-thumb]'));
+
+galleryThumbs.forEach((thumb) => {
+  thumb.addEventListener('click', () => {
+    if (!mainImg) return;
+    const nextUrl = thumb.dataset.imageUrl;
+    if (!nextUrl) return;
+    mainImg.src = nextUrl;
+    galleryThumbs.forEach((node) => node.classList.remove('active'));
+    thumb.classList.add('active');
+  });
+});
 
 function scrollToForm() {
   const el = document.getElementById('requestForm');
