@@ -56,7 +56,7 @@ router.message.filter(AdminFilter())
 router.callback_query.filter(AdminFilter())
 
 MAX_TG_VIDEO_BYTES = 100 * 1024 * 1024
-MAX_TG_VIDEO_DURATION_SEC = 180
+MAX_TG_VIDEO_DURATION_SEC = 300
 
 
 # ── Shop helpers ───────────────────────────────────────────────────────────────
@@ -749,6 +749,9 @@ def _prod_card_kb(p: "Product", page: int = 0, site_url: str = "") -> InlineKeyb
         [
             InlineKeyboardButton(text="🎬 Відео-огляд",    callback_data=f"cms:pe:{pid}:video_url:{page}"),
             InlineKeyboardButton(text="📝 Підпис відео",   callback_data=f"cms:pe:{pid}:video_caption:{page}"),
+        ],
+        [
+            InlineKeyboardButton(text="🗑 Видалити відео", callback_data=f"cms:pvdel:{pid}:{page}"),
         ],
         [
             InlineKeyboardButton(text=toggle_text,         callback_data=f"cms:ptog:{pid}:{page}"),
@@ -1879,6 +1882,51 @@ async def cms_prod_spec_add_value(message: Message, state: FSMContext) -> None:
 
     await state.clear()
     await _show_product_specs_editor(message, prod_id, page)
+
+
+# ── Product: delete video ─────────────────────────────────────────────────────
+
+@router.callback_query(F.data.startswith("cms:pvdel:"))
+async def cms_prod_video_delete(cb: CallbackQuery, state: FSMContext) -> None:
+    parts = cb.data.split(":")
+    try:
+        prod_id = int(parts[2])
+        page = int(parts[3]) if len(parts) > 3 else 0
+    except (ValueError, IndexError):
+        await cb.answer()
+        return
+
+    async with AsyncSessionLocal() as session:
+        product = await session.get(Product, prod_id)
+        if product is None:
+            await cb.answer("Товар не знайдено", show_alert=True)
+            return
+        if not product.video_url:
+            fresh = product
+            await cb.message.edit_text(
+                _prod_card_text(fresh),
+                parse_mode="HTML",
+                reply_markup=_prod_card_kb(fresh, page, _site_url_for_product(fresh.id)),
+            )
+            await cb.answer("Відео вже відсутнє")
+            return
+
+        old_video_url = product.video_url
+        product.video_url = None
+        product.video_caption = None
+        product.video_source_type = None
+        await session.commit()
+        await session.refresh(product)
+        fresh = product
+
+    await asyncio.to_thread(_delete_cloudinary_asset, old_video_url, resource_type="video")
+    site_url = _site_url_for_product(fresh.id)
+    await cb.message.edit_text(
+        _prod_card_text(fresh),
+        parse_mode="HTML",
+        reply_markup=_prod_card_kb(fresh, page, site_url),
+    )
+    await cb.answer("🗑 Відео видалено")
 
 
 # ── Product: toggle availability ──────────────────────────────────────────────
