@@ -53,6 +53,9 @@ router = Router(name="cms")
 router.message.filter(AdminFilter())
 router.callback_query.filter(AdminFilter())
 
+MAX_TG_VIDEO_BYTES = 45 * 1024 * 1024
+MAX_TG_VIDEO_DURATION_SEC = 180
+
 
 # ── Shop helpers ───────────────────────────────────────────────────────────────
 
@@ -206,6 +209,29 @@ async def _download_and_upload_video(bot: Bot, file_id: str, folder: str) -> str
     except Exception as exc:
         logger.error("Telegram video download failed: %s", exc)
         return None
+
+
+def _video_limit_error(video) -> str | None:
+    file_size = getattr(video, "file_size", None) or 0
+    duration = getattr(video, "duration", None) or 0
+
+    if file_size > MAX_TG_VIDEO_BYTES:
+        mb = round(file_size / 1024 / 1024, 1)
+        max_mb = round(MAX_TG_VIDEO_BYTES / 1024 / 1024)
+        return (
+            f"📹 Відео завелике: приблизно {mb} MB.\n"
+            f"Зараз бот приймає відео до {max_mb} MB.\n"
+            "Стисніть ролик або вставте зовнішнє посилання на відео."
+        )
+
+    if duration > MAX_TG_VIDEO_DURATION_SEC:
+        return (
+            f"📹 Відео задовге: приблизно {duration} сек.\n"
+            f"Зараз бот приймає відео до {MAX_TG_VIDEO_DURATION_SEC} сек.\n"
+            "Скоротіть ролик або вставте зовнішнє посилання на відео."
+        )
+
+    return None
 
 
 # ── Themes ───────────────────────────────────────────────────────────────────
@@ -1480,6 +1506,11 @@ async def cms_prod_edit_video_file(message: Message, state: FSMContext) -> None:
             "📹 Cloudinary не налаштований.\n"
             "Надішліть URL відео або введіть «-» щоб очистити:",
         )
+        return
+
+    limit_error = _video_limit_error(message.video)
+    if limit_error:
+        await message.answer(limit_error)
         return
 
     data = await state.get_data()
@@ -3098,6 +3129,11 @@ async def cms_add_video_file(message: Message, state: FSMContext) -> None:
             "📹 Cloudinary не налаштований. Надішліть посилання на відео або натисніть «Пропустити»:",
             reply_markup=_video_kb(),
         )
+        return
+
+    limit_error = _video_limit_error(message.video)
+    if limit_error:
+        await message.answer(limit_error, reply_markup=_video_kb())
         return
 
     folder = f"{app_settings.cloudinary_folder}/videos"
