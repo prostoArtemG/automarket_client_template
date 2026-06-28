@@ -1939,6 +1939,8 @@ async def cms_start_add(cb: CallbackQuery, state: FSMContext) -> None:
     await cb.message.answer(
         "📦 <b>Новий товар</b>\n\n"
         "Крок 1 — Виберіть або введіть групу товарів:\n"
+        "Група = великий розділ каталогу.\n"
+        "Приклади: Легкові авто, Електромобілі, Комерційні авто.\n"
         "<i>(відправ /cancel для скасування)</i>",
         parse_mode="HTML",
         reply_markup=_groups_kb(groups),
