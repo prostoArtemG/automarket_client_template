@@ -721,7 +721,7 @@ def _prod_card_text(p: "Product") -> str:
     if getattr(p, "telegram_channel_post_id", None):
         lines.append(f"📢 Пост у каналі: #{p.telegram_channel_post_id}")
     lines.append("")
-    lines.append(f"👁 Статус: {'✅ В наявності' if p.is_available else '❌ Прихований'}")
+    lines.append(f"👁 Статус: {'✅ В наявності' if p.is_available else '🚫 Продано'}")
     lines.append(f"🖼 Фото:   {'✅ є' if p.image_url else '<i>немає</i>'}")
     desc_val = p.description
     if desc_val:
@@ -737,7 +737,7 @@ def _prod_card_text(p: "Product") -> str:
 
 
 def _prod_card_kb(p: "Product", page: int = 0, site_url: str = "") -> InlineKeyboardMarkup:
-    toggle_text = "👁 Приховати" if p.is_available else "👁 Показати"
+    toggle_text = "🚫 Позначити як продано" if p.is_available else "✅ Повернути в наявність"
     autopost_text = "🔁 Опублікувати знову" if getattr(p, "telegram_channel_post_id", None) else "📢 Опублікувати в канал"
     pid = p.id
     rows: list[list[InlineKeyboardButton]] = [
@@ -2188,7 +2188,7 @@ async def cms_prod_toggle(cb: CallbackQuery, state: FSMContext) -> None:
         parse_mode="HTML",
         reply_markup=_prod_card_kb(fresh, page, site_url),
     )
-    await cb.answer("✅ Показано" if fresh.is_available else "❌ Приховано")
+    await cb.answer("✅ Повернуто в наявність" if fresh.is_available else "🚫 Позначено як продано")
 
 
 # ── Product: delete ────────────────────────────────────────────────────────────
@@ -2213,7 +2213,8 @@ async def cms_prod_del_confirm(cb: CallbackQuery, state: FSMContext) -> None:
     ]])
     await cb.message.edit_text(
         f"🗑 Видалити товар <b>#{product.id} · {product.name}</b>?\n\n"
-        f"<i>Товар буде видалено назавжди.</i>",
+        f"<i>Товар буде видалено назавжди.</i>\n"
+        f"Для звичайного продажу краще використати кнопку <b>«Позначити як продано»</b>.",
         parse_mode="HTML",
         reply_markup=kb,
     )
