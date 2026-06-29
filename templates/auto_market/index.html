@@ -262,10 +262,18 @@
     .badge-top    { background: #2563eb; color: #fff; }
     .badge-unavail{ background: #555; color: #fff; }
     .car-body { padding: 16px; flex: 1; display: flex; flex-direction: column; gap: 8px; }
-    .car-brand { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--accent); }
+    .car-topline { display: flex; flex-direction: column; gap: 5px; }
+    .car-brand { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: .9px; color: var(--accent); }
     .car-title {
-      font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.3;
+      font-size: 22px; font-weight: 800; color: var(--text); line-height: 1.2;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .car-taxonomy { display: flex; flex-wrap: wrap; gap: 6px; }
+    .car-taxonomy-pill {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 4px 8px; border-radius: 999px;
+      background: rgba(255,255,255,.03); border: 1px solid var(--border);
+      font-size: 11px; color: var(--muted); font-weight: 600;
     }
     .car-specs-row { display: flex; flex-wrap: wrap; gap: 6px; }
     .car-spec-tag {
@@ -352,15 +360,45 @@
       .main-grid { grid-template-columns: 1fr; }
       .footer-inner { grid-template-columns: 1fr 1fr; }
       .hero { padding: 40px 0 32px; }
+      .header-inner { flex-wrap: wrap; align-items: flex-start; }
+      .header-search { order: 3; width: 100%; max-width: none; }
+      .header-contacts { margin-left: 0; width: 100%; justify-content: flex-start; }
     }
     @media (max-width: 640px) {
+      .container { padding: 0 14px; }
+      .header-inner { gap: 12px; padding: 12px 0; }
+      .logo { min-width: 0; max-width: 100%; }
+      .logo-icon, .logo-img { width: 34px; height: 34px; }
+      .logo-name { font-size: 16px; }
+      .logo-sub { max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .header-search { min-width: 0; }
+      .search-wrap { width: 100%; overflow: hidden; }
+      .search-wrap input { padding: 10px 12px; font-size: 13px; }
+      .search-wrap button { width: 52px; min-width: 52px; padding: 10px 0; font-size: 18px; }
+      .phone-link { font-size: 12px; }
+      .hero-title { font-size: clamp(28px, 11vw, 44px); }
+      .hero-desc { font-size: 14px; }
       .hero-stats { gap: 20px; }
+      .quick-filter-bar { padding: 10px 0; }
+      .quick-filter-inner {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .quick-select { min-width: 0; width: 100%; }
+      .quick-filter-btn, .quick-reset { width: 100%; justify-content: center; }
+      .catalog-header { align-items: flex-start; }
+      .catalog-meta { width: 100%; justify-content: space-between; }
       .cars-grid { grid-template-columns: 1fr; }
       .car-card-list { flex-direction: column; }
       .car-card-list .car-img-wrap { width: 100%; min-height: 200px; }
+      .car-body { padding: 14px; gap: 10px; }
+      .car-brand { font-size: 14px; }
+      .car-title { font-size: 24px; }
+      .car-taxonomy-pill { font-size: 10px; }
+      .car-footer { align-items: stretch; flex-direction: column; }
+      .btn-view { width: 100%; text-align: center; }
       .footer-inner { grid-template-columns: 1fr; gap: 24px; }
-      .quick-filter-inner { gap: 8px; }
-      .quick-select { min-width: 120px; }
     }
   </style>
 </head>
@@ -827,12 +865,19 @@ function buildCardGrid(c) {
     ? `<span class="car-old-price">${fmtPrice(c.old_price)}</span>` : '';
   const usdPriceHtml = c.price_usd
     ? `<span class="car-price-usd">$${Number(c.price_usd).toLocaleString('uk-UA')}</span>` : '';
+  const taxonomy = [
+    c.group_name ? `<span class="car-taxonomy-pill">&#x1F4C2; ${c.group_name}</span>` : '',
+    c.category ? `<span class="car-taxonomy-pill">&#x1F3F7;&#xFE0F; ${c.category}</span>` : '',
+  ].filter(Boolean).join('');
 
   return `<div class="car-card${c.is_available?'':' unavailable'}" onclick="goProduct(${c.id})">
     <div class="car-img-wrap">${imgHtml}${badgeHtml}</div>
     <div class="car-body">
-      ${c.brand ? `<div class="car-brand">${c.brand}</div>` : ''}
-      <div class="car-title">${c.name}</div>
+      <div class="car-topline">
+        ${c.brand ? `<div class="car-brand">${c.brand}</div>` : ''}
+        <div class="car-title">${c.name}</div>
+      </div>
+      ${taxonomy ? `<div class="car-taxonomy">${taxonomy}</div>` : ''}
       <div class="car-specs-row">${tags}</div>
       <div class="car-footer">
         <div class="car-price-wrap">${oldPriceHtml}<span class="car-price">${fmtPrice(c.price)}</span>${usdPriceHtml}</div>
@@ -862,14 +907,20 @@ function buildCardList(c) {
   const oldPriceHtml = c.old_price ? `<span class="car-old-price">${fmtPrice(c.old_price)}</span>` : '';
   const usdPriceHtml = c.price_usd
     ? `<span class="car-price-usd">$${Number(c.price_usd).toLocaleString('uk-UA')}</span>` : '';
+  const taxonomy = [
+    c.group_name ? `<span class="car-taxonomy-pill">&#x1F4C2; ${c.group_name}</span>` : '',
+    c.category ? `<span class="car-taxonomy-pill">&#x1F3F7;&#xFE0F; ${c.category}</span>` : '',
+  ].filter(Boolean).join('');
 
   return `<div class="car-card-list${c.is_available?'':' unavailable'}" onclick="goProduct(${c.id})">
     <div class="car-img-wrap" style="width:220px;min-height:150px;">${imgHtml}</div>
     <div class="car-body">
       <div class="car-title-area">
-        ${c.brand ? `<div class="car-brand">${c.brand}</div>` : ''}
-        <div class="car-title" style="-webkit-line-clamp:unset;">${c.name}</div>
-        ${c.category ? `<div style="font-size:12px;color:var(--muted);margin-top:4px;">${c.category}</div>` : ''}
+        <div class="car-topline">
+          ${c.brand ? `<div class="car-brand">${c.brand}</div>` : ''}
+          <div class="car-title" style="-webkit-line-clamp:unset;">${c.name}</div>
+        </div>
+        ${taxonomy ? `<div class="car-taxonomy" style="margin-top:8px;">${taxonomy}</div>` : ''}
         <div class="car-specs-row" style="margin-top:8px;">${tags}</div>
       </div>
       <div class="car-footer">
