@@ -46,17 +46,18 @@
     .promo-track {
       display: flex;
       width: max-content;
-      min-width: 100%;
+      min-width: max-content;
       gap: 48px;
       padding: 10px 0;
+      padding-left: 100%;
       font-size: 13px;
       font-weight: 700;
       white-space: nowrap;
-      animation: promo-marquee 24s linear infinite;
+      animation: promo-marquee var(--promo-duration, 24s) linear infinite;
     }
     @keyframes promo-marquee {
       from { transform: translateX(0); }
-      to { transform: translateX(-50%); }
+      to { transform: translateX(-100%); }
     }
 
     /* ── Header ── */
@@ -360,8 +361,10 @@
 
 {% if client.show_promo_bar %}
 {% set promo_line = client.promo_text or "⚡ Авто в наявності щодня оновлюються • 📞 Швидкий зв'язок з менеджером • ✅ Перевірені пропозиції" %}
-<div class="promo-bar" aria-label="Промо повідомлення">
+{% set promo_duration = '36s' if client.promo_speed == 'slow' else '16s' if client.promo_speed == 'fast' else '24s' %}
+<div class="promo-bar" aria-label="Промо повідомлення" style="--promo-duration: {{ promo_duration }};">
   <div class="promo-track">
+    <span>{{ promo_line }}</span>
     <span>{{ promo_line }}</span>
     <span>{{ promo_line }}</span>
   </div>

@@ -49,6 +49,8 @@ def _normalize_viber_url(raw: str | None) -> str | None:
       - None / empty string         → None
       - Already valid URL           → returned as-is
         (starts with http://, https://, viber://, tel:, tg://)
+      - Common Viber domains without scheme
+        e.g. "viber.me/+380..." → "https://viber.me/+380..."
       - Phone number                → converted to viber://chat?number=<encoded>
         e.g. "+380501234567" → "viber://chat?number=%2B380501234567"
 
@@ -67,6 +69,8 @@ def _normalize_viber_url(raw: str | None) -> str | None:
     # Already has a recognised scheme → safe to use directly
     if re.match(r'^(https?|viber|tel|tg|ftp)://', raw, re.IGNORECASE):
         return raw
+    if re.match(r'^(www\.)?(viber\.me|invite\.viber\.com)(/.*)?$', raw, re.IGNORECASE):
+        return "https://" + raw.lstrip("/")
     # Looks like a phone number: optional +, digits, spaces, dashes, parens
     if re.match(r'^[\+\d][\d\s\-\(\)]{5,}$', raw):
         digits_only = re.sub(r'[\s\-\(\)]', '', raw)
@@ -99,6 +103,7 @@ async def _get_shop_data() -> dict:
             "subtitle": None,
             "show_lang_switch": True,
             "promo_text": None,
+            "promo_speed": "medium",
             "show_promo_bar": True,
             "show_banner": True,
             "background_image_url": None,
@@ -121,6 +126,7 @@ async def _get_shop_data() -> dict:
         "subtitle": shop.subtitle,
         "show_lang_switch": shop.show_lang_switch,
         "promo_text": shop.promo_text,
+        "promo_speed": shop.promo_speed or "medium",
         "show_promo_bar": shop.show_promo_bar,
         "show_banner": shop.show_banner,
         "background_image_url": shop.background_image_url,

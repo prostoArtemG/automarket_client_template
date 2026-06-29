@@ -62,6 +62,9 @@ class ShopSettings(Base):
         Boolean, nullable=False, server_default="true", default=True
     )
     promo_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    promo_speed: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="medium", default="medium"
+    )
     show_promo_bar: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="true", default=True
     )

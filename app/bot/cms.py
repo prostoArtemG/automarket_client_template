@@ -342,7 +342,7 @@ SETTINGS_PROMPTS: dict[str, str] = {
     "shop_title":    "🏪 <b>Назва магазину</b>\n\nВведіть назву, яка буде відображатись в шапці сайту:",
     "phone":         "📞 <b>Телефон</b>\n\nВведіть контактний номер телефону:",
     "phone2":        "📞 <b>Телефон 2</b>\n\nВведіть другий контактний номер (необов'язково):",
-    "viber_url":     "📲 <b>Viber</b>\n\nВведіть посилання на Viber\n(наприклад: <code>https://viber.me/+380XXXXXXXXX</code>):",
+    "viber_url":     "📲 <b>Viber</b>\n\nВведіть посилання або номер для Viber.\nПриклади:\n<code>https://viber.me/+380XXXXXXXXX</code>\n<code>viber.me/+380XXXXXXXXX</code>\n<code>+380XXXXXXXXX</code>",
     "subtitle":      "💬 <b>Підзаголовок</b>\n\nВведіть підзаголовок магазину\n(відображається в шапці та на банері):",
     "address":       "📍 <b>Адреса</b>\n\nВведіть адресу магазину:",
     "telegram_url":  "✈️ <b>Telegram</b>\n\nВведіть посилання на Telegram\n(наприклад: <code>https://t.me/myshop</code>):",
@@ -390,12 +390,19 @@ TOGGLE_LABELS: dict[str, str] = {
     "autopost_with_video_enabled": "Додавати відео-посилання",
 }
 
+PROMO_SPEED_LABELS: dict[str, str] = {
+    "slow": "Повільно",
+    "medium": "Середньо",
+    "fast": "Швидко",
+}
+
 
 def _settings_text(shop: ShopSettings | None) -> str:
     def _v(val: str | None) -> str:
         return val if val else "<i>не вказано</i>"
 
     theme = (shop.theme_name if shop else None) or "default"
+    promo_speed = (shop.promo_speed if shop else None) or "medium"
     _on = lambda val: "✅" if val else "❌"
     return (
         f"⚙️ <b>Налаштування магазину</b>\n\n"
@@ -411,6 +418,7 @@ def _settings_text(shop: ShopSettings | None) -> str:
         f"🔗 Username каналу: {_v(shop.telegram_channel_username if shop else None)}\n"
         f"🖼 Логотип: {'✅ є' if (shop and shop.logo_url) else '<i>немає</i>'}\n"
         f"📢 Бігучий рядок: {_v(shop.promo_text if shop else None)}\n"
+        f"⏱ Швидкість рядка: {PROMO_SPEED_LABELS.get(promo_speed, promo_speed)}\n"
         f"🌄 Задній фон: {'✅ є' if (shop and shop.background_image_url) else '<i>немає</i>'}\n"
         f"🔛 Промо-бар: {_on(shop.show_promo_bar if shop is not None else True)}\n"
         f"🌐 Перемикач мови: {_on(shop.show_lang_switch if shop is not None else True)}\n"
@@ -448,6 +456,7 @@ def _settings_overview_kb(shop: ShopSettings | None = None) -> InlineKeyboardMar
             [InlineKeyboardButton(text="🖼 Логотип",                      callback_data="cms:set:logo")],
             [InlineKeyboardButton(text="🎨 Тема сайту",                   callback_data="cms:set:theme")],
             [InlineKeyboardButton(text="📢 Бігучий рядок",                callback_data="cms:set:promo_text")],
+            [InlineKeyboardButton(text="⏱ Швидкість рядка",               callback_data="cms:promo_speed:menu")],
             [InlineKeyboardButton(
                 text=f"🌄 {'✅ ' if has_bg else ''}Задній фон сайту",
                 callback_data="cms:set:background_image",
@@ -462,6 +471,19 @@ def _settings_overview_kb(shop: ShopSettings | None = None) -> InlineKeyboardMar
             [InlineKeyboardButton(text=f"{_bi(ap)} Автопост у канал",    callback_data="cms:toggle:autopost_enabled")],
             [InlineKeyboardButton(text=f"{_bi(apv)} Відео-посилання у пості", callback_data="cms:toggle:autopost_with_video_enabled")],
         ]
+    )
+
+
+def _promo_speed_kb(current: str | None = None) -> InlineKeyboardMarkup:
+    current = current or "medium"
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(
+                text=("✅ " if current == key else "") + label,
+                callback_data=f"cms:promo_speed:set:{key}",
+            )]
+            for key, label in PROMO_SPEED_LABELS.items()
+        ] + [[InlineKeyboardButton(text="⬅️ Назад", callback_data="cms:settings")]]
     )
 
 
@@ -2704,6 +2726,42 @@ async def cms_set_theme(cb: CallbackQuery, state: FSMContext) -> None:
     )
     theme_label = THEMES.get(theme_key, theme_key)
     await cb.answer(f"✅ Тему сайту змінено: {theme_label}", show_alert=False)
+
+
+@router.callback_query(F.data == "cms:promo_speed:menu")
+async def cms_promo_speed_menu(cb: CallbackQuery) -> None:
+    async with AsyncSessionLocal() as session:
+        shop = await session.get(ShopSettings, 1)
+    current = (shop.promo_speed if shop else None) or "medium"
+    await cb.message.edit_text(
+        "⏱ <b>Швидкість бігучого рядка</b>\n\nОберіть швидкість прокрутки у верхній промо-стрічці:",
+        parse_mode="HTML",
+        reply_markup=_promo_speed_kb(current),
+    )
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("cms:promo_speed:set:"))
+async def cms_promo_speed_set(cb: CallbackQuery) -> None:
+    speed = cb.data.rsplit(":", 1)[-1]
+    if speed not in PROMO_SPEED_LABELS:
+        await cb.answer("Невідома швидкість", show_alert=True)
+        return
+    async with AsyncSessionLocal() as session:
+        shop = await session.get(ShopSettings, 1)
+        if shop is None:
+            shop = ShopSettings(id=1, promo_speed=speed)
+            session.add(shop)
+        else:
+            shop.promo_speed = speed
+        await session.commit()
+        await session.refresh(shop)
+    await cb.message.edit_text(
+        _settings_text(shop),
+        parse_mode="HTML",
+        reply_markup=_settings_overview_kb(shop),
+    )
+    await cb.answer(f"✅ Швидкість: {PROMO_SPEED_LABELS[speed]}")
 
 
 @router.callback_query(F.data.startswith("cms:toggle:"))
