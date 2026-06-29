@@ -28,6 +28,7 @@ from aiogram.types import (
     FSInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    InputMediaPhoto,
     Message,
 )
 from sqlalchemy import delete, func, or_, select
@@ -1149,10 +1150,14 @@ def _build_channel_post_text(
     fallback_lines: list[str] = [title, price_line]
     if product.old_price:
         fallback_lines.append(f"Стара ціна: {_pfmt(product.old_price)} грн")
+    if product.description:
+        fallback_lines.append("")
+        fallback_lines.append("Опис:")
+        fallback_lines.append(_trim_text(product.description, 160))
     if specs_pairs:
         fallback_lines.append("")
         fallback_lines.append("Характеристики:")
-        for name, value in specs_pairs[:3]:
+        for name, value in specs_pairs[:2]:
             fallback_lines.append(f"• {name}: {value}")
     if include_video and product.video_url:
         fallback_lines.append("")
@@ -1190,7 +1195,9 @@ async def _autopost_product_to_channel(bot: Bot, product_id: int) -> int | None:
                 .order_by(ProductImage.sort_order)
             )
         ).all())
-        main_image_url = next((img.image_url for img in image_rows if img.is_main), None) or product.image_url
+        image_urls = [img.image_url for img in image_rows if img.image_url]
+        if not image_urls and product.image_url:
+            image_urls = [product.image_url]
 
         product_url = _site_url_for_product(product.id)
         message = _build_channel_post_text(
@@ -1201,20 +1208,35 @@ async def _autopost_product_to_channel(bot: Bot, product_id: int) -> int | None:
         )
 
         sent = None
-        if main_image_url:
-            tmp_photo = await _download_remote_file_to_tmp(main_image_url, ".jpg")
+        if image_urls:
+            tmp_photos: list[str] = []
             try:
-                if tmp_photo:
+                for url in image_urls[:10]:
+                    tmp = await _download_remote_file_to_tmp(url, ".jpg")
+                    if tmp:
+                        tmp_photos.append(tmp)
+
+                if len(tmp_photos) >= 2:
+                    media = []
+                    for idx, tmp in enumerate(tmp_photos):
+                        media.append(InputMediaPhoto(
+                            media=FSInputFile(tmp),
+                            caption=message if idx == 0 else None,
+                        ))
+                    sent_group = await bot.send_media_group(target, media=media)
+                    sent = sent_group[0] if sent_group else None
+                elif len(tmp_photos) == 1:
                     sent = await bot.send_photo(
                         target,
-                        photo=FSInputFile(tmp_photo),
+                        photo=FSInputFile(tmp_photos[0]),
                         caption=message,
                     )
                 else:
                     sent = await bot.send_message(target, message)
             finally:
-                if tmp_photo and os.path.exists(tmp_photo):
-                    os.remove(tmp_photo)
+                for tmp in tmp_photos:
+                    if tmp and os.path.exists(tmp):
+                        os.remove(tmp)
         if sent is None:
             sent = await bot.send_message(target, message, parse_mode="HTML")
 
