@@ -55,7 +55,7 @@ router = Router(name="cms")
 router.message.filter(AdminFilter())
 router.callback_query.filter(AdminFilter())
 
-MAX_TG_VIDEO_BYTES = 100 * 1024 * 1024
+MAX_TG_VIDEO_BYTES = 20 * 1024 * 1024
 MAX_TG_VIDEO_DURATION_SEC = 300
 
 
@@ -276,8 +276,8 @@ def _video_limit_error(video) -> str | None:
         max_mb = round(MAX_TG_VIDEO_BYTES / 1024 / 1024)
         return (
             f"📹 Відео завелике: приблизно {mb} MB.\n"
-            f"Зараз бот приймає відео до {max_mb} MB.\n"
-            "Стисніть ролик або вставте зовнішнє посилання на відео."
+            f"Через стандартний Telegram Bot API бот може завантажити відео до {max_mb} MB.\n"
+            "Стисніть ролик, надішліть коротшу версію або вставте зовнішнє посилання на відео."
         )
 
     if duration > MAX_TG_VIDEO_DURATION_SEC:
@@ -3181,6 +3181,7 @@ async def _enter_video_step(message: Message, state: FSMContext) -> None:
     await message.answer(
         "Крок 11 — Відео-огляд (необов'язково).\n"
         "Надішліть відео прямо з телефону або вставте посилання на YouTube / Instagram / TikTok / mp4.\n"
+        "Якщо надсилаєте файлом через Telegram, для стандартного Bot API краще тримати розмір до 20 MB.\n"
         "Або натисніть «Пропустити».",
         reply_markup=_video_kb(),
     )
