@@ -35,6 +35,29 @@
       --hero-bg: #0a0e14;
     }
 
+    .promo-bar {
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(90deg, rgba(232,160,32,.14), rgba(232,160,32,.06));
+      border-bottom: 1px solid rgba(232,160,32,.18);
+      color: var(--accent);
+    }
+    .promo-track {
+      display: flex;
+      width: max-content;
+      min-width: 100%;
+      gap: 48px;
+      padding: 10px 0;
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+      animation: promo-marquee 24s linear infinite;
+    }
+    @keyframes promo-marquee {
+      from { transform: translateX(0); }
+      to { transform: translateX(-50%); }
+    }
+
     /* ── Header ── */
     .header {
       background: var(--surface); border-bottom: 1px solid var(--border);
@@ -56,6 +79,18 @@
     .logo-sub  { font-size: 10px; color: var(--muted); margin-top: 1px; }
     .header-spacer { flex: 1; }
     .header-search { flex: 1; max-width: 480px; position: relative; }
+    .lang-switch {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg);
+    }
+    .lang-chip {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 38px; padding: 6px 10px; border-radius: 999px;
+      font-size: 11px; font-weight: 800; text-transform: uppercase;
+      color: var(--muted); transition: background .2s, color .2s;
+    }
+    .lang-chip.active { background: var(--accent); color: #000; }
+    .lang-chip:not(.active):hover { color: var(--text); }
     .search-wrap {
       display: flex; border: 1.5px solid var(--border); border-radius: 10px;
       overflow: visible; background: var(--bg); transition: border-color .2s; position: relative;
@@ -89,14 +124,19 @@
     .search-item-meta { font-size: 11px; color: var(--muted); }
     .search-item-price { font-size: 13px; font-weight: 700; color: var(--accent); flex-shrink: 0; }
     .header-contacts { display: flex; align-items: center; gap: 16px; flex-shrink: 0; margin-left: auto; }
-    .phone-link { font-size: 13px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 5px; white-space: nowrap; transition: color .2s; }
-    .phone-link:hover { color: var(--accent); }
+    .phone-link, .contact-link { font-size: 13px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 5px; white-space: nowrap; transition: color .2s; }
+    .phone-link:hover, .contact-link:hover { color: var(--accent); }
 
     /* ── Hero ── */
     .hero {
       background: linear-gradient(135deg, #0a0e14 0%, #111820 50%, #0d1520 100%);
       border-bottom: 1px solid var(--border);
       padding: 60px 0 48px; position: relative; overflow: hidden;
+    }
+    .hero.has-bg {
+      background:
+        linear-gradient(135deg, rgba(10,14,20,.88) 0%, rgba(17,24,32,.82) 50%, rgba(13,21,32,.9) 100%),
+        var(--hero-image) center/cover no-repeat;
     }
     .hero::before {
       content: ''; position: absolute; inset: 0;
@@ -366,6 +406,7 @@
     }
     @media (max-width: 640px) {
       .container { padding: 0 14px; }
+      .promo-track { gap: 28px; font-size: 12px; padding: 8px 0; }
       .header-inner { gap: 12px; padding: 12px 0; }
       .logo { min-width: 0; max-width: 100%; }
       .logo-icon, .logo-img { width: 34px; height: 34px; }
@@ -375,7 +416,8 @@
       .search-wrap { width: 100%; overflow: hidden; }
       .search-wrap input { padding: 10px 12px; font-size: 13px; }
       .search-wrap button { width: 52px; min-width: 52px; padding: 10px 0; font-size: 18px; }
-      .phone-link { font-size: 12px; }
+      .phone-link, .contact-link { font-size: 12px; }
+      .lang-switch { order: 2; }
       .hero-title { font-size: clamp(28px, 11vw, 44px); }
       .hero-desc { font-size: 14px; }
       .hero-stats { gap: 20px; }
@@ -404,6 +446,16 @@
 </head>
 <body>
 
+{% if client.show_promo_bar %}
+{% set promo_line = client.promo_text or "⚡ Авто в наявності щодня оновлюються • 📞 Швидкий зв'язок з менеджером • ✅ Перевірені пропозиції" %}
+<div class="promo-bar" aria-label="Промо повідомлення">
+  <div class="promo-track">
+    <span>{{ promo_line }}</span>
+    <span>{{ promo_line }}</span>
+  </div>
+</div>
+{% endif %}
+
 <!-- HEADER -->
 <header class="header" id="siteHeader">
   <div class="container header-inner">
@@ -428,23 +480,38 @@
       </div>
     </div>
 
+    {% if client.show_lang_switch %}
+    <div class="lang-switch" aria-label="Мова сайту">
+      <a href="?lang=uk" class="lang-chip{% if lang == 'uk' %} active{% endif %}">uk</a>
+      <a href="?lang=ru" class="lang-chip{% if lang == 'ru' %} active{% endif %}">ru</a>
+    </div>
+    {% endif %}
+
     <div class="header-contacts">
       {% if client.phone %}
       <a class="phone-link" href="tel:{{ client.phone }}">&#x1F4DE; {{ client.phone }}</a>
+      {% endif %}
+      {% if client.phone2 %}
+      <a class="contact-link" href="tel:{{ client.phone2 }}">&#x1F4DE; {{ client.phone2 }}</a>
+      {% endif %}
+      {% if client.viber_url %}
+      <a class="contact-link" href="{{ client.viber_url }}" target="_blank" rel="noopener">&#x1F4F2; Viber</a>
       {% endif %}
     </div>
   </div>
 </header>
 
+{% if client.show_banner %}
 <!-- HERO -->
-<section class="hero">
+<section class="hero{% if client.background_image_url and client.show_background_image %} has-bg{% endif %}"{% if client.background_image_url and client.show_background_image %} style="--hero-image:url('{{ client.background_image_url }}')"{% endif %}>
   <div class="container hero-inner">
     <div class="hero-badge">&#x1F697; Авто каталог</div>
     <h1 class="hero-title">{{ client.shop_title }}<br><span>Ваш автомобіль — тут</span></h1>
-    <p class="hero-desc">Широкий вибір автомобілів із зручними фільтрами по марці, моделі, року, пробігу та ціні. Залиште заявку — ми зв'яжемось з вами.</p>
+    <p class="hero-desc">{{ client.subtitle or "Широкий вибір автомобілів із зручними фільтрами по марці, моделі, року, пробігу та ціні. Залиште заявку — ми зв'яжемось з вами." }}</p>
     <div class="hero-stats" id="heroStats"></div>
   </div>
 </section>
+{% endif %}
 
 <!-- QUICK FILTER BAR -->
 <div class="quick-filter-bar">
@@ -592,9 +659,11 @@
     <div>
       {% if client.logo_url %}<img src="{{ client.logo_url }}" alt="{{ client.shop_title }}" style="height:40px;border-radius:8px;margin-bottom:10px;">{% endif %}
       <div class="footer-logo-text">{{ client.shop_title }}</div>
-      <p class="footer-sub">Широкий вибір автомобілів з офіційною гарантією та прозорою історією. Допоможемо знайти ваше ідеальне авто.</p>
+      <p class="footer-sub">{{ client.subtitle or "Широкий вибір автомобілів з офіційною гарантією та прозорою історією. Допоможемо знайти ваше ідеальне авто." }}</p>
       <div class="footer-contacts">
         {% if client.phone %}<a href="tel:{{ client.phone }}">&#x1F4DE; {{ client.phone }}</a>{% endif %}
+        {% if client.phone2 %}<a href="tel:{{ client.phone2 }}">&#x1F4DE; {{ client.phone2 }}</a>{% endif %}
+        {% if client.viber_url %}<a href="{{ client.viber_url }}" target="_blank" rel="noopener">&#x1F4F2; Viber</a>{% endif %}
         {% if client.address %}<p>&#x1F4CD; {{ client.address }}</p>{% endif %}
       </div>
       <div class="footer-social">

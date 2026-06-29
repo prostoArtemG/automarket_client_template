@@ -36,6 +36,29 @@
       --border: #30363d;
     }
 
+    .promo-bar {
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(90deg, rgba(232,160,32,.14), rgba(232,160,32,.06));
+      border-bottom: 1px solid rgba(232,160,32,.18);
+      color: var(--accent);
+    }
+    .promo-track {
+      display: flex;
+      width: max-content;
+      min-width: 100%;
+      gap: 48px;
+      padding: 10px 0;
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+      animation: promo-marquee 24s linear infinite;
+    }
+    @keyframes promo-marquee {
+      from { transform: translateX(0); }
+      to { transform: translateX(-50%); }
+    }
+
     /* ── Header ── */
     .header {
       background: var(--surface); border-bottom: 1px solid var(--border);
@@ -50,6 +73,17 @@
     }
     .logo-name { font-size: 18px; font-weight: 800; color: var(--accent); letter-spacing: -.4px; }
     .header-spacer { flex: 1; }
+    .lang-switch {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg);
+    }
+    .lang-chip {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 38px; padding: 6px 10px; border-radius: 999px;
+      font-size: 11px; font-weight: 800; text-transform: uppercase;
+      color: var(--muted); transition: background .2s, color .2s;
+    }
+    .lang-chip.active { background: var(--accent); color: #000; }
     .btn-back {
       display: flex; align-items: center; gap: 7px;
       background: var(--bg); border: 1.5px solid var(--border);
@@ -302,8 +336,10 @@
     }
     @media (max-width: 640px) {
       .container { padding: 0 14px; }
+      .promo-track { gap: 28px; font-size: 12px; padding: 8px 0; }
       .header-inner { gap: 12px; padding: 12px 0; align-items: center; }
       .logo-name { font-size: 16px; }
+      .lang-switch { order: 2; }
       .btn-back { padding: 10px 12px; font-size: 13px; }
       .breadcrumb { font-size: 12px; }
       .info-brand { font-size: 16px; }
@@ -322,6 +358,16 @@
 </head>
 <body>
 
+{% if client.show_promo_bar %}
+{% set promo_line = client.promo_text or "⚡ Авто в наявності щодня оновлюються • 📞 Швидкий зв'язок з менеджером • ✅ Перевірені пропозиції" %}
+<div class="promo-bar" aria-label="Промо повідомлення">
+  <div class="promo-track">
+    <span>{{ promo_line }}</span>
+    <span>{{ promo_line }}</span>
+  </div>
+</div>
+{% endif %}
+
 <!-- HEADER -->
 <header class="header">
   <div class="container header-inner">
@@ -336,6 +382,12 @@
       </div>
     </a>
     <div class="header-spacer"></div>
+    {% if client.show_lang_switch %}
+    <div class="lang-switch" aria-label="Мова сайту">
+      <a href="?lang=uk" class="lang-chip{% if lang == 'uk' %} active{% endif %}">uk</a>
+      <a href="?lang=ru" class="lang-chip{% if lang == 'ru' %} active{% endif %}">ru</a>
+    </div>
+    {% endif %}
     <a class="btn-back" href="{{ catalog_url }}">&#x2190; До каталогу</a>
   </div>
 </header>
@@ -652,6 +704,8 @@
 <footer class="footer">
   <div class="footer-contacts">
     {% if client.phone %}<a href="tel:{{ client.phone }}">&#x1F4DE; {{ client.phone }}</a>{% endif %}
+    {% if client.phone2 %}<a href="tel:{{ client.phone2 }}">&#x1F4DE; {{ client.phone2 }}</a>{% endif %}
+    {% if client.viber_url %}<a href="{{ client.viber_url }}" target="_blank" rel="noopener">&#x1F4F2; Viber</a>{% endif %}
     {% if client.address %}<a href="#">&#x1F4CD; {{ client.address }}</a>{% endif %}
     {% if client.telegram_url %}<a href="{{ client.telegram_url }}" target="_blank" rel="noopener">&#x2708;&#xFE0F; Telegram</a>{% endif %}
     {% if client.instagram_url %}<a href="{{ client.instagram_url }}" target="_blank" rel="noopener">&#x1F4F7; Instagram</a>{% endif %}
