@@ -382,12 +382,6 @@
       </div>
     </a>
     <div class="header-spacer"></div>
-    {% if client.show_lang_switch %}
-    <div class="lang-switch" aria-label="Мова сайту">
-      <a href="?lang=uk" class="lang-chip{% if lang == 'uk' %} active{% endif %}">uk</a>
-      <a href="?lang=ru" class="lang-chip{% if lang == 'ru' %} active{% endif %}">ru</a>
-    </div>
-    {% endif %}
     <a class="btn-back" href="{{ catalog_url }}">&#x2190; До каталогу</a>
   </div>
 </header>
@@ -397,8 +391,6 @@
   <nav class="breadcrumb">
     <a href="{{ catalog_url }}">{{ client.shop_title }}</a>
     <span class="breadcrumb-sep">/</span>
-    {% if product.group_name %}<a href="{{ catalog_url }}">{{ product.group_name }}</a><span class="breadcrumb-sep">/</span>{% endif %}
-    {% if product.category %}<a href="{{ catalog_url }}">{{ product.category }}</a><span class="breadcrumb-sep">/</span>{% endif %}
     <span>{% if product.brand %}{{ product.brand }} {% endif %}{{ product.name }}</span>
   </nav>
 </div>
@@ -451,13 +443,6 @@
         {% if product.brand %}<div class="info-brand">{{ product.brand }}</div>{% endif %}
         <h1 class="info-title">{{ product.name }}</h1>
       </div>
-      {% if product.group_name or product.category %}
-      <div class="info-taxonomy">
-        {% if product.group_name %}<div class="info-pill">&#x1F4C2; {{ product.group_name }}</div>{% endif %}
-        {% if product.category %}<div class="info-pill">&#x1F3F7;&#xFE0F; {{ product.category }}</div>{% endif %}
-      </div>
-      {% endif %}
-
       <div class="avail-row {% if product.is_available %}avail-yes{% else %}avail-no{% endif %}">
         <span class="avail-dot"></span>
         {% if product.is_available %}В наявності{% else %}Продано{% endif %}
@@ -649,11 +634,6 @@
       {% endif %}
       <div>
         <div class="form-car-name">{% if product.brand %}{{ product.brand }} {% endif %}{{ product.name }}</div>
-        {% if product.group_name or product.category %}
-        <div style="font-size:12px;color:var(--muted);margin-top:2px;">
-          {% if product.group_name %}{{ product.group_name }}{% endif %}{% if product.group_name and product.category %} / {% endif %}{% if product.category %}{{ product.category }}{% endif %}
-        </div>
-        {% endif %}
         <div class="form-car-price">{{ '{:,.0f}'.format(product.price) }} грн{% if product.price_usd %} / ${{ '{:,.0f}'.format(product.price_usd) }}{% endif %}</div>
       </div>
     </div>
@@ -712,8 +692,14 @@
   </div>
   <div class="footer-bottom">
     <span>&#x00A9; {{ client.shop_title }}</span>
-    <a href="{{ catalog_url }}" style="color:var(--accent);">&#x2190; До каталогу</a>
     <span>Всі права захищені</span>
+    <a href="{{ catalog_url }}" style="color:var(--accent);">&#x2190; До каталогу</a>
+    {% if client.show_lang_switch %}
+    <div class="lang-switch footer-lang-switch" aria-label="Мова сайту">
+      <a href="?lang=uk" class="lang-chip{% if lang == 'uk' %} active{% endif %}">uk</a>
+      <a href="?lang=ru" class="lang-chip{% if lang == 'ru' %} active{% endif %}">ru</a>
+    </div>
+    {% endif %}
   </div>
 </footer>
 

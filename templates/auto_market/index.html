@@ -308,13 +308,6 @@
       font-size: 22px; font-weight: 800; color: var(--text); line-height: 1.2;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
     }
-    .car-taxonomy { display: flex; flex-wrap: wrap; gap: 6px; }
-    .car-taxonomy-pill {
-      display: inline-flex; align-items: center; gap: 4px;
-      padding: 4px 8px; border-radius: 999px;
-      background: rgba(255,255,255,.03); border: 1px solid var(--border);
-      font-size: 11px; color: var(--muted); font-weight: 600;
-    }
     .car-specs-row { display: flex; flex-wrap: wrap; gap: 6px; }
     .car-spec-tag {
       display: flex; align-items: center; gap: 4px;
@@ -437,7 +430,6 @@
       .car-body { padding: 14px; gap: 10px; }
       .car-brand { font-size: 14px; }
       .car-title { font-size: 24px; }
-      .car-taxonomy-pill { font-size: 10px; }
       .car-footer { align-items: stretch; flex-direction: column; }
       .btn-view { width: 100%; text-align: center; }
       .footer-inner { grid-template-columns: 1fr; gap: 24px; }
@@ -480,13 +472,6 @@
       </div>
     </div>
 
-    {% if client.show_lang_switch %}
-    <div class="lang-switch" aria-label="Мова сайту">
-      <a href="?lang=uk" class="lang-chip{% if lang == 'uk' %} active{% endif %}">uk</a>
-      <a href="?lang=ru" class="lang-chip{% if lang == 'ru' %} active{% endif %}">ru</a>
-    </div>
-    {% endif %}
-
     <div class="header-contacts">
       {% if client.phone %}
       <a class="phone-link" href="tel:{{ client.phone }}">&#x1F4DE; {{ client.phone }}</a>
@@ -521,6 +506,12 @@
     </select>
     <select class="quick-select" id="qModel" onchange="applyQuickFilter()">
       <option value="">Всі моделі</option>
+    </select>
+    <select class="quick-select" id="qGroup" onchange="applyQuickFilter()">
+      <option value="">Всі групи</option>
+    </select>
+    <select class="quick-select" id="qCategory" onchange="applyQuickFilter()">
+      <option value="">Всі категорії</option>
     </select>
     <select class="quick-select" id="qYear" onchange="applyQuickFilter()">
       <option value="">Рік</option>
@@ -568,6 +559,13 @@
         </div>
 
         <div class="filter-group">
+          <div class="filter-title">Група авто</div>
+          <select class="filter-select" id="groupSelect" onchange="renderCars()">
+            <option value="">Всі групи</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
           <div class="filter-title">Тип кузова</div>
           <select class="filter-select" id="bodySelect" onchange="renderCars()">
             <option value="">Всі типи</option>
@@ -605,9 +603,16 @@
         </div>
 
         <div class="filter-group">
+          <div class="filter-title">Категорія</div>
+          <select class="filter-select" id="categorySelect" onchange="renderCars()">
+            <option value="">Всі категорії</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
           <div class="filter-title">Паливо</div>
           <select class="filter-select" id="fuelSelect" onchange="renderCars()">
-            <option value="">Будь-яке</option>
+            <option value="">Все паливо</option>
           </select>
         </div>
 
@@ -688,6 +693,12 @@
   <div class="footer-bottom">
     <span>&#x00A9; {{ client.shop_title }}</span>
     <span>Всі права захищені</span>
+    {% if client.show_lang_switch %}
+    <div class="lang-switch footer-lang-switch" aria-label="Мова сайту">
+      <a href="?lang=uk" class="lang-chip{% if lang == 'uk' %} active{% endif %}">uk</a>
+      <a href="?lang=ru" class="lang-chip{% if lang == 'ru' %} active{% endif %}">ru</a>
+    </div>
+    {% endif %}
   </div>
 </footer>
 
@@ -754,7 +765,13 @@ function parseYear(v) {
 // ── build filter options ──────────────────────────────────────────────────────
 function buildOptions() {
   const brands = [...new Set(ALL_CARS.map(c => c.brand).filter(Boolean))].sort();
-  const bodies  = [...new Set(ALL_CARS.map(c => c.category).filter(Boolean))].sort();
+  const groups = [...new Set(ALL_CARS.map(c => c.group_name).filter(Boolean))].sort();
+  const bodies = [...new Set(
+    ALL_CARS.map(c =>
+      spec(c,'Тип кузова') || spec(c,'Кузов') || spec(c,'Body') || spec(c,'type body')
+    ).filter(Boolean)
+  )].sort();
+  const categories = [...new Set(ALL_CARS.map(c => c.category).filter(Boolean))].sort();
   const fuels   = [...new Set(ALL_CARS.map(c => spec(c,'Паливо')||spec(c,'паливо')||spec(c,'Fuel')).filter(Boolean))].sort();
   const trans   = [...new Set(ALL_CARS.map(c => spec(c,'Коробка')||spec(c,'коробка')||spec(c,'КПП')).filter(Boolean))].sort();
   const years   = ALL_CARS.map(c => parseYear(spec(c,'Рік')||spec(c,'рік'))).filter(Boolean);
@@ -771,11 +788,25 @@ function buildOptions() {
     if (!el) return;
     el.innerHTML = '<option value="">Всі типи</option>' + bodies.map(b => `<option value="${b}">${b}</option>`).join('');
   });
+  ['groupSelect','qGroup'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const cur = el.value;
+    el.innerHTML = '<option value="">Всі групи</option>' + groups.map(g => `<option value="${g}">${g}</option>`).join('');
+    if (groups.includes(cur)) el.value = cur;
+  });
+  ['categorySelect','qCategory'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const cur = el.value;
+    el.innerHTML = '<option value="">Всі категорії</option>' + categories.map(c => `<option value="${c}">${c}</option>`).join('');
+    if (categories.includes(cur)) el.value = cur;
+  });
   ['fuelSelect','qFuel'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     const cur = el.value;
-    el.innerHTML = '<option value="">Будь-яке</option>' + fuels.map(f => `<option value="${f}">${f}</option>`).join('');
+    el.innerHTML = '<option value="">Все паливо</option>' + fuels.map(f => `<option value="${f}">${f}</option>`).join('');
     if (fuels.includes(cur)) el.value = cur;
   });
   document.getElementById('transmissionSelect').innerHTML =
@@ -831,7 +862,9 @@ function getFilters() {
   return {
     brand:        document.getElementById('brandSelect').value,
     model:        document.getElementById('modelSelect').value,
+    group:        document.getElementById('groupSelect').value,
     body:         document.getElementById('bodySelect').value,
+    category:     document.getElementById('categorySelect').value,
     fuel:         document.getElementById('fuelSelect').value,
     transmission: document.getElementById('transmissionSelect').value,
     avail:        document.getElementById('availCheck').checked,
@@ -848,10 +881,13 @@ function getFilters() {
 
 function filterCars(f) {
   return ALL_CARS.filter(c => {
+    const bodyType = spec(c,'Тип кузова') || spec(c,'Кузов') || spec(c,'Body') || spec(c,'type body') || '';
     if (f.avail && !c.is_available) return false;
     if (f.brand && c.brand !== f.brand) return false;
     if (f.model && c.name !== f.model) return false;
-    if (f.body  && c.category !== f.body) return false;
+    if (f.group && c.group_name !== f.group) return false;
+    if (f.body  && bodyType !== f.body) return false;
+    if (f.category && c.category !== f.category) return false;
     if (f.fuel) {
       const cf = spec(c,'Паливо')||spec(c,'паливо')||spec(c,'Fuel')||'';
       if (cf !== f.fuel) return false;
@@ -934,11 +970,6 @@ function buildCardGrid(c) {
     ? `<span class="car-old-price">${fmtPrice(c.old_price)}</span>` : '';
   const usdPriceHtml = c.price_usd
     ? `<span class="car-price-usd">$${Number(c.price_usd).toLocaleString('uk-UA')}</span>` : '';
-  const taxonomy = [
-    c.group_name ? `<span class="car-taxonomy-pill">&#x1F4C2; ${c.group_name}</span>` : '',
-    c.category ? `<span class="car-taxonomy-pill">&#x1F3F7;&#xFE0F; ${c.category}</span>` : '',
-  ].filter(Boolean).join('');
-
   return `<div class="car-card${c.is_available?'':' unavailable'}" onclick="goProduct(${c.id})">
     <div class="car-img-wrap">${imgHtml}${badgeHtml}</div>
     <div class="car-body">
@@ -946,7 +977,6 @@ function buildCardGrid(c) {
         ${c.brand ? `<div class="car-brand">${c.brand}</div>` : ''}
         <div class="car-title">${c.name}</div>
       </div>
-      ${taxonomy ? `<div class="car-taxonomy">${taxonomy}</div>` : ''}
       <div class="car-specs-row">${tags}</div>
       <div class="car-footer">
         <div class="car-price-wrap">${oldPriceHtml}<span class="car-price">${fmtPrice(c.price)}</span>${usdPriceHtml}</div>
@@ -976,11 +1006,6 @@ function buildCardList(c) {
   const oldPriceHtml = c.old_price ? `<span class="car-old-price">${fmtPrice(c.old_price)}</span>` : '';
   const usdPriceHtml = c.price_usd
     ? `<span class="car-price-usd">$${Number(c.price_usd).toLocaleString('uk-UA')}</span>` : '';
-  const taxonomy = [
-    c.group_name ? `<span class="car-taxonomy-pill">&#x1F4C2; ${c.group_name}</span>` : '',
-    c.category ? `<span class="car-taxonomy-pill">&#x1F3F7;&#xFE0F; ${c.category}</span>` : '',
-  ].filter(Boolean).join('');
-
   return `<div class="car-card-list${c.is_available?'':' unavailable'}" onclick="goProduct(${c.id})">
     <div class="car-img-wrap" style="width:220px;min-height:150px;">${imgHtml}</div>
     <div class="car-body">
@@ -989,7 +1014,6 @@ function buildCardList(c) {
           ${c.brand ? `<div class="car-brand">${c.brand}</div>` : ''}
           <div class="car-title" style="-webkit-line-clamp:unset;">${c.name}</div>
         </div>
-        ${taxonomy ? `<div class="car-taxonomy" style="margin-top:8px;">${taxonomy}</div>` : ''}
         <div class="car-specs-row" style="margin-top:8px;">${tags}</div>
       </div>
       <div class="car-footer">
@@ -1038,13 +1062,17 @@ function goProduct(id) {
 function applyQuickFilter() {
   const b = document.getElementById('qBrand').value;
   const m = document.getElementById('qModel').value;
+  const g = document.getElementById('qGroup').value;
+  const c = document.getElementById('qCategory').value;
   const y = document.getElementById('qYear').value;
   const f = document.getElementById('qFuel').value;
   document.getElementById('brandSelect').value = b;
   document.getElementById('modelSelect').value = m;
+  document.getElementById('groupSelect').value = g;
+  document.getElementById('categorySelect').value = c;
   if (y) document.getElementById('yearMin').value = y, document.getElementById('yearMax').value = y;
   else document.getElementById('yearMin').value = '', document.getElementById('yearMax').value = '';
-  if (f) document.getElementById('fuelSelect').value = f;
+  document.getElementById('fuelSelect').value = f;
   renderCars();
   document.querySelector('.main-wrap').scrollIntoView({behavior:'smooth'});
 }
@@ -1063,7 +1091,7 @@ function handleSearch(val) {
   if (!val.trim()) { dd.style.display = 'none'; return; }
   const q = val.toLowerCase();
   const results = ALL_CARS.filter(c => {
-    return [c.brand, c.name, c.category].filter(Boolean).join(' ').toLowerCase().includes(q);
+    return [c.brand, c.name, c.group_name, c.category].filter(Boolean).join(' ').toLowerCase().includes(q);
   }).slice(0, 8);
   if (!results.length) { dd.style.display = 'none'; return; }
   dd.innerHTML = results.map(c => {
@@ -1071,11 +1099,12 @@ function handleSearch(val) {
       ? `<img src="${c.image_url}" alt="${c.name}" loading="lazy">`
       : `<div class="search-item-ph">&#x1F697;</div>`;
     const yr = spec(c,'Рік')||spec(c,'рік')||'';
+    const bodyType = spec(c,'Тип кузова') || spec(c,'Кузов') || '';
     return `<div class="search-item" onclick="goProduct(${c.id})">
       ${imgHtml}
       <div class="search-item-info">
         <div class="search-item-name">${c.brand ? c.brand+' '+c.name : c.name}</div>
-        <div class="search-item-meta">${c.category||''}${yr ? ' · '+yr : ''}</div>
+        <div class="search-item-meta">${bodyType || c.category || ''}${yr ? ' · '+yr : ''}</div>
       </div>
       <div class="search-item-price">${fmtPrice(c.price)}</div>
     </div>`;
@@ -1105,7 +1134,7 @@ document.addEventListener('click', e => {
 
 // ── Reset ─────────────────────────────────────────────────────────────────────
 function resetFilters() {
-  ['brandSelect','modelSelect','bodySelect','fuelSelect','transmissionSelect','qBrand','qModel','qYear','qFuel'].forEach(id => {
+  ['brandSelect','modelSelect','groupSelect','bodySelect','categorySelect','fuelSelect','transmissionSelect','qBrand','qModel','qGroup','qCategory','qYear','qFuel'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
