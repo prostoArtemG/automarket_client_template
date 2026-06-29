@@ -696,6 +696,8 @@ def _prod_card_text(p: "Product") -> str:
         lines.append(f"\n🎬 Відео: {p.video_url}")
     if getattr(p, "video_caption", None):
         lines.append(f"📝 Підпис відео: {p.video_caption}")
+    if getattr(p, "telegram_channel_post_id", None):
+        lines.append(f"📢 Пост у каналі: #{p.telegram_channel_post_id}")
     lines.append("")
     lines.append(f"👁 Статус: {'✅ В наявності' if p.is_available else '❌ Прихований'}")
     lines.append(f"🖼 Фото:   {'✅ є' if p.image_url else '<i>немає</i>'}")
@@ -714,6 +716,7 @@ def _prod_card_text(p: "Product") -> str:
 
 def _prod_card_kb(p: "Product", page: int = 0, site_url: str = "") -> InlineKeyboardMarkup:
     toggle_text = "👁 Приховати" if p.is_available else "👁 Показати"
+    autopost_text = "🔁 Опублікувати знову" if getattr(p, "telegram_channel_post_id", None) else "📢 Опублікувати в канал"
     pid = p.id
     rows: list[list[InlineKeyboardButton]] = [
         [
@@ -754,6 +757,9 @@ def _prod_card_kb(p: "Product", page: int = 0, site_url: str = "") -> InlineKeyb
         ],
         [
             InlineKeyboardButton(text="🗑 Видалити відео", callback_data=f"cms:pvdel:{pid}:{page}"),
+        ],
+        [
+            InlineKeyboardButton(text=autopost_text, callback_data=f"cms:ppost:{pid}:{page}"),
         ],
         [
             InlineKeyboardButton(text=toggle_text,         callback_data=f"cms:ptog:{pid}:{page}"),
@@ -1377,6 +1383,57 @@ async def cms_prod_view(cb: CallbackQuery, state: FSMContext) -> None:
         reply_markup=_prod_card_kb(product, page, site_url),
     )
     await cb.answer()
+
+
+# ── Product: manual post to Telegram channel ──────────────────────────────────
+
+@router.callback_query(F.data.startswith("cms:ppost:"))
+async def cms_prod_post_to_channel(cb: CallbackQuery, state: FSMContext) -> None:
+    parts = cb.data.split(":")
+    try:
+        prod_id = int(parts[2])
+        page = int(parts[3]) if len(parts) > 3 else 0
+    except (ValueError, IndexError):
+        await cb.answer()
+        return
+
+    shop = await _get_shop()
+    if not shop.autopost_enabled:
+        await cb.answer("Спочатку увімкніть «Автопост у канал» в налаштуваннях", show_alert=True)
+        return
+    if not _channel_target(shop):
+        await cb.answer("Спочатку заповніть Telegram канал у налаштуваннях", show_alert=True)
+        return
+
+    try:
+        post_id = await _autopost_product_to_channel(cb.bot, prod_id)
+    except Exception as exc:
+        logger.warning("Could not manually post product %s to Telegram channel: %s", prod_id, exc)
+        await cb.answer("Не вдалося опублікувати товар у канал", show_alert=True)
+        return
+
+    async with AsyncSessionLocal() as session:
+        product = await session.get(Product, prod_id)
+    if product is None:
+        await cb.answer("Товар не знайдено", show_alert=True)
+        return
+
+    site_url = _site_url_for_product(product.id)
+    await cb.message.edit_text(
+        _prod_card_text(product),
+        parse_mode="HTML",
+        reply_markup=_prod_card_kb(product, page, site_url),
+    )
+
+    post_link = _channel_post_link(shop, post_id)
+    if post_link:
+        await cb.answer("✅ Опубліковано в канал")
+        await cb.message.answer(
+            f"✅ Товар опубліковано в канал.\n{post_link}",
+            disable_web_page_preview=True,
+        )
+    else:
+        await cb.answer("✅ Опубліковано в канал")
 
 
 # ── Product: edit ──────────────────────────────────────────────────────────────
