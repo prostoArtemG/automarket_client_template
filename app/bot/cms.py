@@ -25,6 +25,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
     CallbackQuery,
+    FSInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
@@ -176,6 +177,26 @@ def upload_video_to_cloudinary(file_path: str, folder: str) -> str | None:
         return result.get("secure_url")
     except Exception as exc:
         logger.error("Cloudinary video upload failed: %s", exc)
+        return None
+
+
+async def _download_remote_file_to_tmp(url: str, suffix: str) -> str | None:
+    """Download a remote asset to /tmp and return local path."""
+    try:
+        import httpx
+
+        tmp = f"/tmp/{uuid4()}{suffix}"
+        timeout = httpx.Timeout(60.0, connect=20.0)
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+            async with client.stream("GET", url) as resp:
+                resp.raise_for_status()
+                with open(tmp, "wb") as fh:
+                    async for chunk in resp.aiter_bytes():
+                        if chunk:
+                            fh.write(chunk)
+        return tmp
+    except Exception as exc:
+        logger.warning("Remote file download failed for %s: %s", url, exc)
         return None
 
 
@@ -762,6 +783,9 @@ def _prod_card_kb(p: "Product", page: int = 0, site_url: str = "") -> InlineKeyb
             InlineKeyboardButton(text=autopost_text, callback_data=f"cms:ppost:{pid}:{page}"),
         ],
         [
+            InlineKeyboardButton(text="🗑 Видалити пост з каналу", callback_data=f"cms:pdelpost:{pid}:{page}"),
+        ],
+        [
             InlineKeyboardButton(text=toggle_text,         callback_data=f"cms:ptog:{pid}:{page}"),
             InlineKeyboardButton(text="🗑 Видалити товар", callback_data=f"cms:pdc:{pid}:{page}"),
         ],
@@ -1074,6 +1098,72 @@ def _channel_post_link(shop: ShopSettings | None, post_id: int | None) -> str | 
     return f"https://t.me/{shop.telegram_channel_username.lstrip('@')}/{post_id}"
 
 
+def _trim_text(text: str, limit: int) -> str:
+    text = " ".join((text or "").split())
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 1)].rstrip() + "…"
+
+
+def _build_channel_post_text(
+    product: Product,
+    specs_pairs: list[tuple[str, str]],
+    product_url: str | None,
+    *,
+    include_video: bool,
+    caption_limit: int = 1024,
+) -> str:
+    title = f"🚘 {((product.brand or '').strip() + ' ' + product.name).strip()}"
+    lines: list[str] = [title]
+
+    price_line = f"Ціна: { _pfmt(product.price) } грн"
+    if product.price_usd:
+        price_line += f" / ${_pfmt(product.price_usd)}"
+    lines.append(price_line)
+
+    if product.old_price:
+        lines.append(f"Стара ціна: {_pfmt(product.old_price)} грн")
+
+    if specs_pairs:
+        lines.append("")
+        lines.append("Характеристики:")
+        for name, value in specs_pairs[:4]:
+            lines.append(f"• {name}: {value}")
+
+    if product.description:
+        lines.append("")
+        lines.append("Опис:")
+        lines.append(_trim_text(product.description, 220))
+
+    if include_video and product.video_url:
+        lines.append("")
+        lines.append(f"Відео огляд: {product.video_url}")
+
+    lines.append("")
+    lines.append(f"Детальніше: {product_url or 'сайт буде доступний після деплою'}")
+
+    text = "\n".join(lines).strip()
+    if len(text) <= caption_limit:
+        return text
+
+    fallback_lines: list[str] = [title, price_line]
+    if product.old_price:
+        fallback_lines.append(f"Стара ціна: {_pfmt(product.old_price)} грн")
+    if specs_pairs:
+        fallback_lines.append("")
+        fallback_lines.append("Характеристики:")
+        for name, value in specs_pairs[:3]:
+            fallback_lines.append(f"• {name}: {value}")
+    if include_video and product.video_url:
+        fallback_lines.append("")
+        fallback_lines.append(f"Відео огляд: {product.video_url}")
+    fallback_lines.append("")
+    fallback_lines.append(f"Детальніше: {product_url or 'сайт буде доступний після деплою'}")
+
+    text = "\n".join(fallback_lines).strip()
+    return _trim_text(text, caption_limit)
+
+
 async def _autopost_product_to_channel(bot: Bot, product_id: int) -> int | None:
     async with AsyncSessionLocal() as session:
         shop = await session.get(ShopSettings, 1)
@@ -1084,38 +1174,48 @@ async def _autopost_product_to_channel(bot: Bot, product_id: int) -> int | None:
         if not target:
             return None
 
-        price_text = f"{_pfmt(product.price)} грн"
-        price_usd_text = f"\nЦіна USD: <b>${_pfmt(product.price_usd)}</b>" if product.price_usd else ""
-        old_price_text = f"\nСтара ціна: {_pfmt(product.old_price)} грн" if product.old_price else ""
-        specs_list = _parse_specs_text(product.specs)
-        specs_preview = "\n".join(
-            f"• {html.escape(name)}: {html.escape(value)}"
-            for name, value in specs_list[:6]
-        )
-        if specs_preview:
-            specs_preview = f"\n\nХарактеристики:\n{specs_preview}"
-        video_link = ""
-        if product.video_url and shop.autopost_with_video_enabled:
-            video_link = f"\n\nВідео огляд: {product.video_url}"
+        spec_rows = list((
+            await session.scalars(
+                select(ProductSpec)
+                .where(ProductSpec.product_id == product_id)
+                .order_by(ProductSpec.id)
+            )
+        ).all())
+        specs_list = [(row.name, row.value) for row in spec_rows] or _parse_specs_text(product.specs)
+
+        image_rows = list((
+            await session.scalars(
+                select(ProductImage)
+                .where(ProductImage.product_id == product_id)
+                .order_by(ProductImage.sort_order)
+            )
+        ).all())
+        main_image_url = next((img.image_url for img in image_rows if img.is_main), None) or product.image_url
 
         product_url = _site_url_for_product(product.id)
-        message = (
-            f"🚘 <b>{html.escape(product.brand + ' ' if product.brand else '')}{html.escape(product.name)}</b>\n"
-            f"Ціна: <b>{price_text}</b>{price_usd_text}{old_price_text}"
-            f"{specs_preview}"
-            f"{video_link}"
-            f"\n\nДетальніше: {product_url or 'сайт буде доступний після деплою'}"
+        message = _build_channel_post_text(
+            product,
+            specs_list,
+            product_url,
+            include_video=bool(product.video_url and shop.autopost_with_video_enabled),
         )
 
         sent = None
-        if product.image_url:
-            sent = await bot.send_photo(
-                target,
-                photo=product.image_url,
-                caption=message[:1024],
-                parse_mode="HTML",
-            )
-        else:
+        if main_image_url:
+            tmp_photo = await _download_remote_file_to_tmp(main_image_url, ".jpg")
+            try:
+                if tmp_photo:
+                    sent = await bot.send_photo(
+                        target,
+                        photo=FSInputFile(tmp_photo),
+                        caption=message,
+                    )
+                else:
+                    sent = await bot.send_message(target, message)
+            finally:
+                if tmp_photo and os.path.exists(tmp_photo):
+                    os.remove(tmp_photo)
+        if sent is None:
             sent = await bot.send_message(target, message, parse_mode="HTML")
 
         product.telegram_channel_post_id = sent.message_id if sent else None
@@ -1434,6 +1534,58 @@ async def cms_prod_post_to_channel(cb: CallbackQuery, state: FSMContext) -> None
         )
     else:
         await cb.answer("✅ Опубліковано в канал")
+
+
+@router.callback_query(F.data.startswith("cms:pdelpost:"))
+async def cms_prod_delete_channel_post(cb: CallbackQuery, state: FSMContext) -> None:
+    parts = cb.data.split(":")
+    try:
+        prod_id = int(parts[2])
+        page = int(parts[3]) if len(parts) > 3 else 0
+    except (ValueError, IndexError):
+        await cb.answer()
+        return
+
+    shop = await _get_shop()
+    target = _channel_target(shop)
+    if not target:
+        await cb.answer("Канал не налаштований", show_alert=True)
+        return
+
+    async with AsyncSessionLocal() as session:
+        product = await session.get(Product, prod_id)
+        if product is None:
+            await cb.answer("Товар не знайдено", show_alert=True)
+            return
+        post_id = product.telegram_channel_post_id
+        if not post_id:
+            await cb.answer("У цього товару немає збереженого поста", show_alert=True)
+            return
+
+    try:
+        await cb.bot.delete_message(chat_id=target, message_id=post_id)
+    except Exception as exc:
+        logger.warning("Could not delete channel post %s for product %s: %s", post_id, prod_id, exc)
+        await cb.answer("Не вдалося видалити пост з каналу", show_alert=True)
+        return
+
+    async with AsyncSessionLocal() as session:
+        product = await session.get(Product, prod_id)
+        if product is None:
+            await cb.answer("Товар не знайдено", show_alert=True)
+            return
+        product.telegram_channel_post_id = None
+        await session.commit()
+        await session.refresh(product)
+        fresh = product
+
+    site_url = _site_url_for_product(fresh.id)
+    await cb.message.edit_text(
+        _prod_card_text(fresh),
+        parse_mode="HTML",
+        reply_markup=_prod_card_kb(fresh, page, site_url),
+    )
+    await cb.answer("🗑 Пост у каналі видалено")
 
 
 # ── Product: edit ──────────────────────────────────────────────────────────────
