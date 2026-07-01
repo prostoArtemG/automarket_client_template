@@ -1341,6 +1341,7 @@ class CmsAddProduct(StatesGroup):
     old_price      = State()
     photos         = State()  # multi-photo collection (up to 5)
     video          = State()  # optional video review (file or URL)
+    publish_channel = State()  # final confirmation after product is saved
 
 
 class CmsSettings(StatesGroup):
@@ -3449,6 +3450,17 @@ def _video_kb() -> InlineKeyboardMarkup:
     )
 
 
+def _publish_channel_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="📢 Опублікувати", callback_data="cms:add:publish:yes"),
+                InlineKeyboardButton(text="⏭ Не публікувати", callback_data="cms:add:publish:no"),
+            ],
+        ]
+    )
+
+
 async def _show_photos_step(message: Message, state: FSMContext, *, reset: bool) -> None:
     data = await state.get_data()
     collected_photos = [] if reset else list(data.get("collected_photos") or [])
@@ -3739,12 +3751,6 @@ async def _do_save_product(message: Message, state: FSMContext) -> None:
         except Exception as exc:
             logger.warning("Could not save ProductImage rows (table may not exist yet): %s", exc)
 
-    try:
-        await _autopost_product_to_channel(message.bot, product_id)
-    except Exception as exc:
-        logger.warning("Could not autopost product %s to Telegram channel: %s", product_id, exc)
-
-    await state.clear()
     group_label = f" [{data['group_name']}]" if data.get("group_name") else ""
     cat_label = f" · {data['category']}" if data.get("category") else ""
     brand_label = f" [{data['brand']}]" if data.get("brand") else ""
@@ -3752,12 +3758,79 @@ async def _do_save_product(message: Message, state: FSMContext) -> None:
     usd_label = f"\nЦіна USD: ${data['price_usd']}" if data.get("price_usd") else ""
     photo_label = f"\nФото: {len(photos)} шт." if photos else ""
     video_label = "\nВідео: ✅ додано" if data.get("video_url") else ""
-    await message.answer(
+    summary_text = (
         f"✅ Товар <b>{data['name']}</b>{brand_label} додано!{group_label}{cat_label}\n"
-        f"Ціна: {data['price']} грн{usd_label}{old_price_label}{photo_label}{video_label}",
+        f"Ціна: {data['price']} грн{usd_label}{old_price_label}{photo_label}{video_label}"
+    )
+
+    shop = await _get_shop()
+    can_offer_channel_publish = bool(shop.autopost_enabled and _channel_target(shop))
+    if can_offer_channel_publish:
+        await state.update_data(saved_product_id=product_id, saved_product_summary=summary_text)
+        await state.set_state(CmsAddProduct.publish_channel)
+        await message.answer(
+            summary_text
+            + "\n\n📢 Опублікувати цей товар у Telegram-канал зараз?",
+            parse_mode="HTML",
+            reply_markup=_publish_channel_kb(),
+        )
+        return
+
+    await state.clear()
+    await message.answer(summary_text, parse_mode="HTML", reply_markup=main_menu())
+
+
+@router.callback_query(F.data == "cms:add:publish:no", StateFilter(CmsAddProduct.publish_channel))
+async def cms_add_publish_no(cb: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    summary_text = data.get("saved_product_summary") or "✅ Товар додано."
+    await state.clear()
+    await cb.message.edit_reply_markup(reply_markup=None)
+    await cb.message.answer(
+        summary_text + "\n\n⏭ Публікацію в канал пропущено.",
         parse_mode="HTML",
         reply_markup=main_menu(),
     )
+    await cb.answer("Публікацію пропущено")
+
+
+@router.callback_query(F.data == "cms:add:publish:yes", StateFilter(CmsAddProduct.publish_channel))
+async def cms_add_publish_yes(cb: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    product_id = data.get("saved_product_id")
+    summary_text = data.get("saved_product_summary") or "✅ Товар додано."
+    if not product_id:
+        await state.clear()
+        await cb.message.answer(summary_text, parse_mode="HTML", reply_markup=main_menu())
+        await cb.answer()
+        return
+
+    try:
+        post_id = await _autopost_product_to_channel(cb.bot, int(product_id))
+    except Exception as exc:
+        logger.warning("Could not autopost product %s to Telegram channel: %s", product_id, exc)
+        await state.clear()
+        await cb.message.edit_reply_markup(reply_markup=None)
+        await cb.message.answer(
+            summary_text + "\n\n⚠️ Товар збережено, але не вдалося опублікувати його в канал.",
+            parse_mode="HTML",
+            reply_markup=main_menu(),
+        )
+        await cb.answer("Не вдалося опублікувати", show_alert=True)
+        return
+
+    shop = await _get_shop()
+    post_link = _channel_post_link(shop, post_id)
+    await state.clear()
+    await cb.message.edit_reply_markup(reply_markup=None)
+    extra = f"\n\n📢 Опубліковано в канал:\n{post_link}" if post_link else "\n\n📢 Товар опубліковано в канал."
+    await cb.message.answer(
+        summary_text + extra,
+        parse_mode="HTML",
+        reply_markup=main_menu(),
+        disable_web_page_preview=True,
+    )
+    await cb.answer("Опубліковано")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
