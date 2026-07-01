@@ -746,7 +746,19 @@ function spec(car, key) {
 }
 function fmtPrice(p) {
   if (!p && p !== 0) return '';
+  if (Number(p) <= 0) return '';
   return Number(p).toLocaleString('uk-UA') + ' грн';
+}
+function renderPriceBlock(c) {
+  const priceUah = Number(c.price || 0);
+  const priceUsd = Number(c.price_usd || 0);
+  const oldPriceHtml = c.old_price ? `<span class="car-old-price">${fmtPrice(c.old_price)}</span>` : '';
+  const usdPriceHtml = priceUsd > 0
+    ? `<span class="car-price-usd">$${Number(c.price_usd).toLocaleString('uk-UA')}</span>` : '';
+  const currentPriceHtml = priceUah > 0
+    ? `<span class="car-price">${fmtPrice(c.price)}</span>`
+    : `<span class="car-price">Ціну уточнюйте</span>`;
+  return `${oldPriceHtml}${currentPriceHtml}${usdPriceHtml}`;
 }
 function fmtMileage(v) {
   if (!v) return '';
@@ -970,10 +982,6 @@ function buildCardGrid(c) {
     : (c.old_price ? `<div class="car-badge-wrap"><span class="car-badge badge-sale">Акція</span></div>` :
        (c.badge ? `<div class="car-badge-wrap"><span class="car-badge badge-top">${c.badge}</span></div>` : ''));
 
-  const oldPriceHtml = c.old_price
-    ? `<span class="car-old-price">${fmtPrice(c.old_price)}</span>` : '';
-  const usdPriceHtml = c.price_usd
-    ? `<span class="car-price-usd">$${Number(c.price_usd).toLocaleString('uk-UA')}</span>` : '';
   return `<div class="car-card${c.is_available?'':' unavailable'}" onclick="goProduct(${c.id})">
     <div class="car-img-wrap">${imgHtml}${badgeHtml}</div>
     <div class="car-body">
@@ -983,7 +991,7 @@ function buildCardGrid(c) {
       </div>
       <div class="car-specs-row">${tags}</div>
       <div class="car-footer">
-        <div class="car-price-wrap">${oldPriceHtml}<span class="car-price">${fmtPrice(c.price)}</span>${usdPriceHtml}</div>
+        <div class="car-price-wrap">${renderPriceBlock(c)}</div>
         <button class="btn-view" onclick="event.stopPropagation();goProduct(${c.id})">Детальніше →</button>
       </div>
     </div>
@@ -1007,9 +1015,6 @@ function buildCardList(c) {
   const imgHtml = c.image_url
     ? `<img src="${c.image_url}" alt="${c.brand||''} ${c.name}" loading="lazy" style="width:100%;height:100%;object-fit:cover;">`
     : `<div class="car-img-placeholder" style="height:100%;">&#x1F697;</div>`;
-  const oldPriceHtml = c.old_price ? `<span class="car-old-price">${fmtPrice(c.old_price)}</span>` : '';
-  const usdPriceHtml = c.price_usd
-    ? `<span class="car-price-usd">$${Number(c.price_usd).toLocaleString('uk-UA')}</span>` : '';
   return `<div class="car-card-list${c.is_available?'':' unavailable'}" onclick="goProduct(${c.id})">
     <div class="car-img-wrap" style="width:220px;min-height:150px;">${imgHtml}</div>
     <div class="car-body">
@@ -1021,7 +1026,7 @@ function buildCardList(c) {
         <div class="car-specs-row" style="margin-top:8px;">${tags}</div>
       </div>
       <div class="car-footer">
-        <div class="car-price-wrap">${oldPriceHtml}<span class="car-price">${fmtPrice(c.price)}</span>${usdPriceHtml}</div>
+        <div class="car-price-wrap">${renderPriceBlock(c)}</div>
         <button class="btn-view" onclick="event.stopPropagation();goProduct(${c.id})">Детальніше →</button>
       </div>
     </div>

@@ -509,13 +509,17 @@
       <!-- PRICE -->
       <div class="price-block">
         <div class="price-label">Ціна</div>
-        {% if product.old_price %}
+        {% if product.old_price and product.price and product.price > 0 %}
         <div style="display:flex;align-items:center;gap:10px;">
           <span class="price-old">{{ '{:,.0f}'.format(product.old_price) }} грн</span>
           <span class="price-discount">-{{ ((1 - product.price / product.old_price) * 100) | int }}%</span>
         </div>
         {% endif %}
+        {% if product.price and product.price > 0 %}
         <div class="price-current">{{ '{:,.0f}'.format(product.price) }} грн</div>
+        {% else %}
+        <div class="price-current">Ціну уточнюйте</div>
+        {% endif %}
         {% if product.price_usd %}
         <div class="price-usd">${{ '{:,.0f}'.format(product.price_usd) }}</div>
         {% endif %}
@@ -637,7 +641,14 @@
       {% endif %}
       <div>
         <div class="form-car-name">{% if product.brand %}{{ product.brand }} {% endif %}{{ product.name }}</div>
-        <div class="form-car-price">{{ '{:,.0f}'.format(product.price) }} грн{% if product.price_usd %} / ${{ '{:,.0f}'.format(product.price_usd) }}{% endif %}</div>
+        <div class="form-car-price">
+          {% if product.price and product.price > 0 %}
+            {{ '{:,.0f}'.format(product.price) }} грн
+          {% else %}
+            Ціну уточнюйте
+          {% endif %}
+          {% if product.price_usd %} / ${{ '{:,.0f}'.format(product.price_usd) }}{% endif %}
+        </div>
       </div>
     </div>
 

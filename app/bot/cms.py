@@ -1139,53 +1139,84 @@ def _build_channel_post_text(
     title = f"🚘 {((product.brand or '').strip() + ' ' + product.name).strip()}"
     lines: list[str] = [title]
 
-    price_line = f"Ціна: { _pfmt(product.price) } грн"
-    if product.price_usd:
-        price_line += f" / ${_pfmt(product.price_usd)}"
+    spec_icon_map = {
+        "рік": "📅",
+        "пробіг": "🛣️",
+        "паливо": "⛽",
+        "коробка": "⚙️",
+        "кпп": "⚙️",
+        "місто": "📍",
+        "тип кузова": "🚗",
+        "кузов": "🚗",
+        "двигун": "🔧",
+        "об'єм": "🔧",
+        "обьем": "🔧",
+        "привід": "🛞",
+        "привод": "🛞",
+        "колір": "🎨",
+        "цвет": "🎨",
+    }
+
+    price_uah = float(product.price) if product.price is not None else 0.0
+    price_usd = float(product.price_usd) if product.price_usd is not None else 0.0
+    if price_uah > 0 and price_usd > 0:
+        price_line = f"💰 <b>{_pfmt(product.price)} грн</b> / <b>${_pfmt(product.price_usd)}</b>"
+    elif price_uah > 0:
+        price_line = f"💰 <b>{_pfmt(product.price)} грн</b>"
+    elif price_usd > 0:
+        price_line = f"💰 <b>${_pfmt(product.price_usd)}</b>"
+    else:
+        price_line = "💰 <b>Ціну уточнюйте</b>"
     lines.append(price_line)
 
-    if product.old_price:
-        lines.append(f"Стара ціна: {_pfmt(product.old_price)} грн")
+    if product.old_price and float(product.old_price) > 0:
+        lines.append(f"🏷 Стара ціна: {_pfmt(product.old_price)} грн")
 
     if specs_pairs:
         lines.append("")
-        lines.append("Характеристики:")
-        for name, value in specs_pairs[:4]:
-            lines.append(f"• {name}: {value}")
+        lines.append("📋 <b>Характеристики:</b>")
+        for name, value in specs_pairs[:6]:
+            icon = spec_icon_map.get((name or "").strip().lower(), "•")
+            lines.append(f"{icon} <b>{html.escape(name)}:</b> {html.escape(value)}")
 
     if product.description:
         lines.append("")
-        lines.append("Опис:")
-        lines.append(_trim_text(product.description, 220))
+        lines.append("📝 <b>Опис:</b>")
+        desc_lines = [part.strip("•- \t") for part in product.description.splitlines() if part.strip()]
+        for part in desc_lines[:5]:
+            lines.append(f"✅ {html.escape(_trim_text(part, 180))}")
 
     if include_video and product.video_url:
         lines.append("")
-        lines.append(f"Відео огляд: {product.video_url}")
+        lines.append(f"🎬 Відео огляд: {product.video_url}")
 
     lines.append("")
-    lines.append(f"Детальніше: {product_url or 'сайт буде доступний після деплою'}")
+    lines.append(f"🔗 Детальніше: {product_url or 'сайт буде доступний після деплою'}")
 
     text = "\n".join(lines).strip()
     if len(text) <= caption_limit:
         return text
 
     fallback_lines: list[str] = [title, price_line]
-    if product.old_price:
-        fallback_lines.append(f"Стара ціна: {_pfmt(product.old_price)} грн")
+    if product.old_price and float(product.old_price) > 0:
+        fallback_lines.append(f"🏷 Стара ціна: {_pfmt(product.old_price)} грн")
     if product.description:
         fallback_lines.append("")
-        fallback_lines.append("Опис:")
-        fallback_lines.append(_trim_text(product.description, 160))
+        fallback_lines.append("📝 <b>Опис:</b>")
+        desc_lines = [part.strip("•- \t") for part in product.description.splitlines() if part.strip()]
+        for part in desc_lines[:3]:
+            fallback_lines.append(f"✅ {html.escape(_trim_text(part, 120))}")
     if specs_pairs:
         fallback_lines.append("")
-        fallback_lines.append("Характеристики:")
-        for name, value in specs_pairs[:2]:
-            fallback_lines.append(f"• {name}: {value}")
+        fallback_lines.append("📋 <b>Характеристики:</b>")
+        for name, value in specs_pairs[:4]:
+            icon = spec_icon_map.get((name or "").strip().lower(), "•")
+            fallback_lines.append(f"{icon} <b>{html.escape(name)}:</b> {html.escape(value)}")
     if include_video and product.video_url:
         fallback_lines.append("")
-        fallback_lines.append(f"Відео огляд: {product.video_url}")
+        fallback_lines.append(f"🎬 Відео огляд: {product.video_url}")
     fallback_lines.append("")
-    fallback_lines.append(f"Детальніше: {product_url or 'сайт буде доступний після деплою'}")
+    fallback_lines.append(f"🔗 Детальніше: {product_url or 'сайт буде доступний після деплою'}")
 
     text = "\n".join(fallback_lines).strip()
     return _trim_text(text, caption_limit)
@@ -1244,6 +1275,7 @@ async def _autopost_product_to_channel(bot: Bot, product_id: int) -> int | None:
                         media.append(InputMediaPhoto(
                             media=FSInputFile(tmp),
                             caption=message if idx == 0 else None,
+                            parse_mode="HTML" if idx == 0 else None,
                         ))
                     sent_group = await bot.send_media_group(target, media=media)
                     sent = sent_group[0] if sent_group else None
@@ -1252,6 +1284,7 @@ async def _autopost_product_to_channel(bot: Bot, product_id: int) -> int | None:
                         target,
                         photo=FSInputFile(tmp_photos[0]),
                         caption=message,
+                        parse_mode="HTML",
                     )
                 else:
                     sent = await bot.send_message(target, message)
