@@ -753,11 +753,13 @@ function renderPriceBlock(c) {
   const priceUah = Number(c.price || 0);
   const priceUsd = Number(c.price_usd || 0);
   const oldPriceHtml = c.old_price ? `<span class="car-old-price">${fmtPrice(c.old_price)}</span>` : '';
-  const usdPriceHtml = priceUsd > 0
+  const usdPriceHtml = priceUah > 0 && priceUsd > 0
     ? `<span class="car-price-usd">$${Number(c.price_usd).toLocaleString('uk-UA')}</span>` : '';
   const currentPriceHtml = priceUah > 0
     ? `<span class="car-price">${fmtPrice(c.price)}</span>`
-    : `<span class="car-price">Ціну уточнюйте</span>`;
+    : (priceUsd > 0
+      ? `<span class="car-price">$${Number(c.price_usd).toLocaleString('uk-UA')}</span>`
+      : `<span class="car-price">Ціну уточнюйте</span>`);
   return `${oldPriceHtml}${currentPriceHtml}${usdPriceHtml}`;
 }
 function fmtMileage(v) {
